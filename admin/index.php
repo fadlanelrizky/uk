@@ -1,0 +1,245 @@
+<?php
+$role_allowed = 'admin';
+$title = "Dashboard";
+require_once '../includes/header.php';
+
+// Stats
+$total_users = $conn->query("SELECT COUNT(*) as t FROM users WHERE role='user'")->fetch_assoc()['t'];
+$total_event = $conn->query("SELECT COUNT(*) as t FROM event")->fetch_assoc()['t'];
+$total_income = $conn->query("SELECT SUM(total) as t FROM orders WHERE status='paid'")->fetch_assoc()['t'];
+$total_terjual = $conn->query("SELECT SUM(qty) as t FROM order_detail od JOIN orders o ON od.id_order=o.id_order WHERE o.status='paid'")->fetch_assoc()['t'];
+
+$chart_data = ['labels' => [], 'revenue' => []];
+for($i=6; $i>=0; $i--) {
+    $date = date('Y-m-d', strtotime("-$i days"));
+    $chart_data['labels'][] = date('d M', strtotime($date));
+    $rev = $conn->query("SELECT SUM(total) as t FROM orders WHERE status='paid' AND DATE(tanggal_order) = '$date'")->fetch_assoc()['t'];
+    $chart_data['revenue'][] = $rev ? (int)$rev : 0;
+}
+
+// Data Tambahan untuk Dashboard
+$recent_orders = $conn->query("
+    SELECT o.id_order, o.tanggal_order, o.total, o.status, u.nama_lengkap 
+    FROM orders o 
+    JOIN users u ON o.id_user = u.id_user 
+    ORDER BY o.tanggal_order DESC LIMIT 5
+");
+
+$upcoming_events = $conn->query("
+    SELECT e.nama_event, e.tanggal_event, v.nama_venue 
+    FROM event e 
+    JOIN venue v ON e.id_venue = v.id_venue 
+    WHERE e.tanggal_event >= CURDATE() 
+    ORDER BY e.tanggal_event ASC LIMIT 4
+");
+?>
+
+<div class="row text-white mb-4">
+    <div class="col-md-3 mb-3 mb-md-0">
+        <div class="card bg-primary text-white text-center p-3 h-100 shadow-sm" style="border:none; border-radius:12px;">
+            <h5 class="text-white-50 mb-2 mt-1">Total User</h5>
+            <h2 class="mb-1"><?= (int)$total_users ?></h2>
+        </div>
+    </div>
+    <div class="col-md-3 mb-3 mb-md-0">
+        <div class="card bg-success text-white text-center p-3 h-100 shadow-sm" style="border:none; border-radius:12px;">
+            <h5 class="text-white-50 mb-2 mt-1">Pendapatan</h5>
+            <h2 class="mb-1">Rp <?= number_format((float)$total_income, 0, ',', '.') ?></h2>
+        </div>
+    </div>
+    <div class="col-md-3 mb-3 mb-md-0">
+        <div class="card bg-warning text-dark text-center p-3 h-100 shadow-sm" style="border:none; border-radius:12px;">
+            <h5 class="opacity-75 mb-2 mt-1">Tiket Terjual</h5>
+            <h2 class="mb-1"><?= (int)$total_terjual ?: 0 ?></h2>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card bg-info text-dark text-center p-3 h-100 shadow-sm" style="border:none; border-radius:12px;">
+            <h5 class="opacity-75 mb-2 mt-1">Total Event</h5>
+            <h2 class="mb-1"><?= (int)$total_event ?></h2>
+        </div>
+    </div>
+</div>
+
+<div class="row mt-2 gy-4">
+    <div class="col-lg-8">
+        <div class="card shadow-lg border-secondary h-100" style="border-radius:12px; overflow:hidden;">
+            <div class="card-header bg-dark text-white border-bottom border-secondary d-flex justify-content-between align-items-center">
+                <h5 class="mb-0 fs-6"><i class="bi bi-graph-up-arrow me-2 text-info"></i>Grafik Pendapatan (7 Hari Terakhir)</h5>
+            </div>
+            <div class="card-body p-3 p-md-4" style="background: rgba(15,23,42,0.6);">
+                <canvas id="revenueChart" style="max-height: 300px; width: 100%;"></canvas>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-lg-4">
+        <div class="card shadow-lg border-secondary h-100" style="border-radius:12px; overflow:hidden;">
+            <div class="card-header bg-dark text-white border-bottom border-secondary d-flex justify-content-between align-items-center">
+                <h5 class="mb-0 fs-6"><i class="bi bi-calendar-event me-2 text-warning"></i>Event Mendatang</h5>
+                <a href="event.php" class="btn btn-sm btn-outline-secondary py-0" style="font-size:0.75rem;">Selengkapnya</a>
+            </div>
+            <div class="card-body p-0" style="background: rgba(15,23,42,0.4);">
+                <ul class="list-group list-group-flush">
+                    <?php if($upcoming_events->num_rows > 0): ?>
+                        <?php while($ev = $upcoming_events->fetch_assoc()): ?>
+                            <li class="list-group-item bg-transparent text-white border-secondary py-3">
+                                <div class="d-flex justify-content-between align-items-center">
+                                    <div>
+                                        <h6 class="mb-1 text-truncate" style="max-width: 200px;"><?= htmlspecialchars($ev['nama_event']) ?></h6>
+                                        <small class="text-white-50"><i class="bi bi-geo-alt me-1"></i><?= htmlspecialchars($ev['nama_venue']) ?></small>
+                                    </div>
+                                    <div class="text-end">
+                                        <span class="badge" style="background:rgba(16,185,129,0.15);color:#34d399;font-size:0.7rem;"><?= date('d M Y', strtotime($ev['tanggal_event'])) ?></span>
+                                    </div>
+                                </div>
+                            </li>
+                        <?php endwhile; ?>
+                    <?php else: ?>
+                        <li class="list-group-item bg-transparent text-white-50 text-center py-4">Belum ada event mendatang.</li>
+                    <?php endif; ?>
+                </ul>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row mt-4">
+    <div class="col-12">
+        <div class="card shadow-lg border-secondary" style="border-radius:12px; overflow:hidden;">
+            <div class="card-header bg-dark text-white border-bottom border-secondary d-flex justify-content-between align-items-center">
+                <h5 class="mb-0 fs-6"><i class="bi bi-receipt me-2 text-primary"></i>Transaksi Terbaru</h5>
+                <a href="orders.php" class="btn btn-sm btn-outline-secondary py-0" style="font-size:0.75rem;">Lihat Semua</a>
+            </div>
+            <div class="card-body p-0" style="background: rgba(15,23,42,0.4);">
+                <div class="table-responsive">
+                    <table class="table table-hover text-white m-0 border-secondary">
+                        <thead style="border-bottom: 2px solid #334155;">
+                            <tr>
+                                <th class="ps-4">ID Order</th>
+                                <th>Pelanggan</th>
+                                <th>Tanggal</th>
+                                <th>Total</th>
+                                <th class="pe-4 text-center">Status</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <?php if($recent_orders->num_rows > 0): ?>
+                                <?php while($ro = $recent_orders->fetch_assoc()): ?>
+                                    <tr>
+                                        <td class="ps-4 align-middle fw-medium">#<?= str_pad($ro['id_order'], 4, '0', STR_PAD_LEFT) ?></td>
+                                        <td class="align-middle"><?= htmlspecialchars($ro['nama_lengkap']) ?></td>
+                                        <td class="align-middle text-white-50" style="font-size: 0.85rem;"><?= date('d M Y, H:i', strtotime($ro['tanggal_order'])) ?></td>
+                                        <td class="align-middle">Rp <?= number_format($ro['total'], 0, ',', '.') ?></td>
+                                        <td class="pe-4 text-center align-middle">
+                                            <?php if($ro['status'] == 'paid'): ?>
+                                                <span class="badge bg-success bg-opacity-25 text-success border border-success"><i class="bi bi-check-circle me-1"></i>Paid</span>
+                                            <?php elseif($ro['status'] == 'pending'): ?>
+                                                <span class="badge bg-warning bg-opacity-25 text-warning border border-warning"><i class="bi bi-clock-history me-1"></i>Pending</span>
+                                            <?php else: ?>
+                                                <span class="badge bg-danger bg-opacity-25 text-danger border border-danger"><i class="bi bi-x-circle me-1"></i>Batal</span>
+                                            <?php endif; ?>
+                                        </td>
+                                    </tr>
+                                <?php endwhile; ?>
+                            <?php else: ?>
+                                <tr><td colspan="5" class="text-center py-4 text-white-50">Belum ada transaksi sama sekali.</td></tr>
+                            <?php endif; ?>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+document.addEventListener("DOMContentLoaded", function() {
+    const ctx = document.getElementById('revenueChart').getContext('2d');
+    
+    // Gradient for the line chart
+    let gradient = ctx.createLinearGradient(0, 0, 0, 350);
+    gradient.addColorStop(0, 'rgba(129, 140, 248, 0.6)'); // Accent color matching --accent-1
+    gradient.addColorStop(1, 'rgba(129, 140, 248, 0)');
+
+    new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: <?= json_encode($chart_data['labels']) ?>,
+            datasets: [{
+                label: 'Pendapatan',
+                data: <?= json_encode($chart_data['revenue']) ?>,
+                borderColor: '#818cf8',
+                backgroundColor: gradient,
+                borderWidth: 3,
+                pointBackgroundColor: '#c084fc',
+                pointBorderColor: '#1e293b',
+                pointBorderWidth: 2,
+                pointHoverBackgroundColor: '#fff',
+                pointHoverBorderColor: '#c084fc',
+                pointRadius: 4,
+                pointHoverRadius: 6,
+                fill: true,
+                tension: 0.4
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: {
+                    display: false
+                },
+                tooltip: {
+                    backgroundColor: 'rgba(15, 23, 42, 0.9)',
+                    titleColor: '#fff',
+                    bodyColor: '#e2e8f0',
+                    borderColor: 'rgba(255,255,255,0.1)',
+                    borderWidth: 1,
+                    padding: 10,
+                    callbacks: {
+                        label: function(context) {
+                            let value = context.raw;
+                            return 'Rp ' + value.toLocaleString('id-ID');
+                        }
+                    }
+                }
+            },
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    grid: {
+                        color: 'rgba(255, 255, 255, 0.05)',
+                        drawBorder: false
+                    },
+                    ticks: {
+                        color: '#94a3b8',
+                        font: { family: "'Plus Jakarta Sans', sans-serif", size: 11 },
+                        callback: function(value, index, values) {
+                            if(value >= 1000000) {
+                                return 'Rp ' + (value / 1000000) + ' Jt';
+                            } else if(value >= 1000) {
+                                return 'Rp ' + (value / 1000) + ' Rb';
+                            }
+                            return 'Rp ' + value;
+                        }
+                    }
+                },
+                x: {
+                    grid: {
+                        display: false,
+                        drawBorder: false
+                    },
+                    ticks: {
+                        color: '#94a3b8',
+                        font: { family: "'Plus Jakarta Sans', sans-serif", size: 11 }
+                    }
+                }
+            }
+        }
+    });
+});
+</script>
+
+<?php require_once '../includes/footer.php'; ?>
