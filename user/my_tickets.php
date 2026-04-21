@@ -13,19 +13,42 @@ if(isset($_GET['action']) && isset($_GET['id'])) {
     $cek = $conn->query("SELECT status FROM orders WHERE id_order=$id_order AND id_user=$id_user AND status='pending'")->fetch_assoc();
     if($cek) {
         if($action === 'pay') {
-            $conn->query("UPDATE orders SET status='paid' WHERE id_order=$id_order");
-            
-            // Tiket akan di-generate oleh admin setelah verifikasi
-            echo "<script>
-            Swal.fire({
-                title: 'Berhasil!',
-                text: 'Pembayaran berhasil dikonfirmasi. Menunggu persetujuan admin untuk penerbitan e-tiket.',
-                icon: 'success',
-                background: '#1e293b', color: '#f8fafc',
-                confirmButtonColor: '#818cf8'
-            }).then(() => { window.location.href='my_tickets.php'; });
-            </script>";
-            exit();
+            $conn->begin_transaction();
+            try {
+                // Update status order menjadi paid
+                $conn->query("UPDATE orders SET status='paid' WHERE id_order=$id_order");
+
+                // Auto-generate e-tiket langsung tanpa perlu persetujuan admin
+                $details = $conn->query("SELECT * FROM order_detail WHERE id_order=$id_order");
+                while($d = $details->fetch_assoc()) {
+                    $qty = (int)$d['qty'];
+                    $id_det = (int)$d['id_detail'];
+                    // Cek apakah tiket sudah ada (hindari duplikat)
+                    $cek_att = $conn->query("SELECT id_attendee FROM attendee WHERE id_order_detail=$id_det");
+                    if($cek_att->num_rows == 0) {
+                        for($i = 0; $i < $qty; $i++) {
+                            $kode = 'TIX-' . strtoupper(substr(md5(uniqid(mt_rand(), true)), 0, 8));
+                            $conn->query("INSERT INTO attendee (id_order_detail, kode_tiket, status_checkin) VALUES ($id_det, '$kode', 'belum')");
+                        }
+                    }
+                }
+                $conn->commit();
+
+                echo "<script>
+                Swal.fire({
+                    title: 'Pembayaran Berhasil!',
+                    text: 'E-Tiket Anda telah diterbitkan. Silakan cek tiket Anda di bawah.',
+                    icon: 'success',
+                    background: '#1e293b', color: '#f8fafc',
+                    confirmButtonColor: '#818cf8'
+                }).then(() => { window.location.href='my_tickets.php'; });
+                </script>";
+                exit();
+            } catch (Exception $e) {
+                $conn->rollback();
+                echo "<script>alert('Error: " . $e->getMessage() . "');</script>";
+                exit();
+            }
         } elseif($action === 'cancel') {
             $conn->query("UPDATE orders SET status='cancelled' WHERE id_order=$id_order");
             
@@ -60,12 +83,27 @@ $orders = $conn->query("
     WHERE o.id_user = $id_user 
     ORDER BY o.tanggal_order DESC
 ");
+
+// Ambil waktu server DB saat ini (Unix Timestamp) agar akurat tanpa masalah timezone
+$db_time_q = $conn->query("SELECT UNIX_TIMESTAMP(NOW()) as db_now");
+$db_time = $db_time_q->fetch_assoc()['db_now'];
+
+// Query khusus pending orders untuk banner countdown
+$pending_orders = $conn->query("
+    SELECT o.id_order, o.tanggal_order, UNIX_TIMESTAMP(o.tanggal_order) as ts_order, e.nama_event, t.nama_tiket, od.qty
+    FROM orders o
+    JOIN order_detail od ON o.id_order = od.id_order
+    JOIN tiket t ON od.id_tiket = t.id_tiket
+    JOIN event e ON t.id_event = e.id_event
+    WHERE o.id_user = $id_user AND o.status = 'pending'
+    ORDER BY o.tanggal_order ASC
+");
 ?>
 
 <div class="container py-5">
 
     <!-- Page Header -->
-    <div class="d-flex align-items-center justify-content-between mb-5">
+    <div class="d-flex align-items-center justify-content-between mb-4">
         <div>
             <h2 class="fw-bold mb-1">E-Tiket Saya</h2>
             <p class="text-muted small mb-0">Riwayat pemesanan dan kode akses gate tiketmu</p>
@@ -74,6 +112,49 @@ $orders = $conn->query("
             <i class="bi bi-plus me-1"></i>Beli Tiket Lagi
         </a>
     </div>
+
+    <?php if ($pending_orders && $pending_orders->num_rows > 0): ?>
+    <!-- Banner Peringatan Pending + Countdown -->
+    <div class="mb-5" id="pending-warning-banner">
+        <div style="background:linear-gradient(135deg,rgba(251,191,36,0.08),rgba(239,68,68,0.06));border:1px solid rgba(251,191,36,0.3);border-radius:16px;padding:1.25rem 1.5rem;">
+            <div class="d-flex align-items-center gap-2 mb-3">
+                <div style="width:36px;height:36px;background:rgba(251,191,36,0.15);border-radius:50%;display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+                    <i class="bi bi-exclamation-triangle-fill" style="color:#fbbf24;font-size:1rem;"></i>
+                </div>
+                <div>
+                    <div class="fw-bold" style="color:#fbbf24;font-size:0.95rem;">Segera Selesaikan Pembayaran!</div>
+                    <div style="font-size:0.78rem;color:#94a3b8;">Pesanan yang tidak dibayar dalam <strong style="color:#f87171;">24 jam</strong> akan otomatis hangus dan kuota dikembalikan.</div>
+                </div>
+            </div>
+            <div class="d-flex flex-column gap-2">
+                <?php while ($po = $pending_orders->fetch_assoc()):
+                    $deadline_ts = $po['ts_order'] + 86400; // +24 jam dari waktu timestamp server DB langsung
+                    $order_id_padded = str_pad($po['id_order'], 4, '0', STR_PAD_LEFT);
+                ?>
+                <div class="d-flex align-items-center justify-content-between flex-wrap gap-2"
+                     style="background:rgba(15,23,42,0.5);border:1px solid rgba(251,191,36,0.15);border-radius:10px;padding:0.75rem 1rem;">
+                    <div>
+                        <div class="fw-semibold" style="font-size:0.88rem;color:#f1f5f9;">
+                            <span class="font-monospace text-muted" style="font-size:0.78rem;">#<?= $order_id_padded ?></span>
+                            &nbsp;<?= htmlspecialchars($po['nama_event']) ?>
+                        </div>
+                        <div style="font-size:0.78rem;color:#94a3b8;">
+                            <i class="bi bi-ticket-perforated me-1"></i><?= htmlspecialchars($po['nama_tiket']) ?>
+                            &bull; <?= $po['qty'] ?> tiket
+                        </div>
+                    </div>
+                    <div class="text-end">
+                        <div style="font-size:0.72rem;color:#94a3b8;margin-bottom:2px;">Sisa Waktu</div>
+                        <div class="countdown-badge font-monospace fw-bold"
+                             data-deadline="<?= $deadline_ts ?>"
+                             style="color:#fbbf24;font-size:1rem;letter-spacing:1px;">--:--:--</div>
+                    </div>
+                </div>
+                <?php endwhile; ?>
+            </div>
+        </div>
+    </div>
+    <?php endif; ?>
 
     <style>
         .order-card {
@@ -212,9 +293,9 @@ $orders = $conn->query("
                                                 <?= $att['kode_tiket'] ?>
                                             </div>
                                             <?php if($att['status_checkin'] == 'sudah'): ?>
-                                                <span class="badge bg-success text-white shadow-sm" style="font-size:0.7rem; padding: 0.4rem 0.6rem;">Terpakai</span>
+                                                <span class="badge bg-success text-white shadow-sm" style="font-size:0.7rem; padding: 0.4rem 0.6rem;"><i class="bi bi-check-circle-fill me-1"></i>Sudah Check In</span>
                                             <?php else: ?>
-                                                <span class="badge text-white shadow-sm" style="background:#818cf8; font-size:0.7rem; padding: 0.4rem 0.6rem;">Berlaku</span>
+                                                <span class="badge text-white shadow-sm" style="background:#818cf8; font-size:0.7rem; padding: 0.4rem 0.6rem;"><i class="bi bi-clock-fill me-1"></i>Belum Check In</span>
                                             <?php endif; ?>
                                         </div>
                                     </div>
@@ -222,19 +303,9 @@ $orders = $conn->query("
                             <?php endwhile; ?>
                         </div>
                     <?php else: ?>
-                        <!-- State Pembayaran Lunas tapi belum diverifikasi Admin -->
-                        <div class="ticket-wrapper">
-                            <div class="ticket-info" style="border-right:none;">
-                                <h5 class="fw-bold mb-1 text-white"><?= htmlspecialchars($o['nama_event']) ?></h5>
-                                <p class="text-muted small mb-0">
-                                    <i class="bi bi-calendar3 me-1" style="color:#c084fc;"></i> <?= date('d M Y', strtotime($o['tanggal_event'])) ?>
-                                    <span class="mx-2">&bull;</span>
-                                    <i class="bi bi-ticket-perforated ms-1 me-1" style="color:#818cf8;"></i> <?= htmlspecialchars($o['nama_tiket']) ?>
-                                </p>
-                            </div>
-                        </div>
-                        <div class="alert mt-3 mb-0 border-0 shadow-sm" style="background: rgba(129,140,248,0.1); border: 1px solid rgba(129,140,248,0.2) !important; color: #a5b4fc; border-radius: 12px; font-size:0.9rem;">
-                            <i class="bi bi-hourglass-split me-2"></i> Pembayaran berhasil dikonfirmasi. Menunggu persetujuan Admin untuk penerbitan E-Tiket (QR Code & Kode).
+                        <!-- Fallback: tiket belum ada (seharusnya tidak terjadi pada alur normal) -->
+                        <div class="alert mt-3 mb-0 border-0 shadow-sm" style="background: rgba(239,68,68,0.1); border: 1px solid rgba(239,68,68,0.2) !important; color: #fca5a5; border-radius: 12px; font-size:0.9rem;">
+                            <i class="bi bi-exclamation-triangle-fill me-2"></i> Terjadi kesalahan saat menerbitkan tiket. Hubungi admin untuk bantuan.
                         </div>
                     <?php endif; ?>
 
@@ -355,6 +426,55 @@ function confirmCancelUser(url, eventName) {
         }
     });
 }
+
+// ── Countdown Timer untuk Pending Orders ──────────────────────────
+(function () {
+    function pad(n) { return String(n).padStart(2, '0'); }
+
+    // Sinkronisasi dengan waktu server DB untuk menghindari perbedaan timezone client (PC) vs server
+    const serverNowAtLoad = <?= isset($db_time) ? $db_time : time() ?>;
+    const clientNowAtLoad = Math.floor(Date.now() / 1000);
+    const offset = serverNowAtLoad - clientNowAtLoad;
+
+    function updateCountdowns() {
+        const badges = document.querySelectorAll('.countdown-badge');
+        const now    = Math.floor(Date.now() / 1000) + offset;
+        let anyExpired = false;
+
+        badges.forEach(function (el) {
+            const deadline = parseInt(el.dataset.deadline, 10);
+            const diff     = deadline - now;
+
+            if (diff <= 0) {
+                el.textContent = 'HANGUS';
+                el.style.color = '#ef4444';
+                anyExpired = true;
+            } else {
+                const h = Math.floor(diff / 3600);
+                const m = Math.floor((diff % 3600) / 60);
+                const s = diff % 60;
+                el.textContent = pad(h) + ':' + pad(m) + ':' + pad(s);
+
+                // Warna berubah merah jika sisa < 1 jam
+                if (diff < 3600) {
+                    el.style.color = '#ef4444';
+                } else if (diff < 6 * 3600) {
+                    el.style.color = '#f97316'; // oranye jika < 6 jam
+                }
+            }
+        });
+
+        // Jika ada yang expired, reload setelah 2 detik agar auto_cancel berjalan
+        if (anyExpired) {
+            setTimeout(function () { window.location.reload(); }, 2000);
+        }
+    }
+
+    if (document.querySelector('.countdown-badge')) {
+        updateCountdowns();
+        setInterval(updateCountdowns, 1000);
+    }
+})();
 </script>
 
 <?php require_once '../includes/footer.php'; ?>

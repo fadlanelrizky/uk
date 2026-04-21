@@ -261,17 +261,14 @@ $stats = $conn->query($stats_query)->fetch_assoc();
                                                 $cek_t = $conn->query("SELECT id_attendee FROM attendee a JOIN order_detail od ON a.id_order_detail = od.id_detail WHERE od.id_order=$id_loop");
                                                 $has_ticket = $cek_t->num_rows > 0;
                                             ?>
-                                            <?php if(!$has_ticket && $o['status'] != 'cancelled'): ?>
-                                                <form method="POST" action="" id="approveForm<?= $o['id_order'] ?>" class="d-inline m-0 p-0">
-                                                    <input type="hidden" name="approve" value="<?= $o['id_order'] ?>">
-                                                    <button type="button" class="btn btn-sm btn-success py-1 mt-1" onclick="confirmApprove(<?= $o['id_order'] ?>, '<?= htmlspecialchars(addslashes($o['nama_lengkap'])) ?>')"><i class="bi bi-check-lg"></i></button>
+                                            <?php if($o['status'] == 'pending'): ?>
+                                                <!-- Pending: hanya bisa di-cancel, approve tidak diperlukan (tiket auto-terbit saat bayar) -->
+                                                <form method="POST" action="" id="cancelForm<?= $o['id_order'] ?>" class="d-inline m-0 p-0">
+                                                    <input type="hidden" name="cancel" value="<?= $o['id_order'] ?>">
+                                                    <button type="button" class="btn btn-sm btn-danger py-1" onclick="confirmCancel(<?= $o['id_order'] ?>, '<?= htmlspecialchars(addslashes($o['nama_lengkap'])) ?>')">
+                                                        <i class="bi bi-x-lg me-1"></i>Cancel
+                                                    </button>
                                                 </form>
-                                                <?php if($o['status'] == 'pending'): ?>
-                                                    <form method="POST" action="" id="cancelForm<?= $o['id_order'] ?>" class="d-inline m-0 p-0">
-                                                        <input type="hidden" name="cancel" value="<?= $o['id_order'] ?>">
-                                                        <button type="button" class="btn btn-sm btn-danger py-1 mt-1" onclick="confirmCancel(<?= $o['id_order'] ?>, '<?= htmlspecialchars(addslashes($o['nama_lengkap'])) ?>')"><i class="bi bi-x-lg"></i></button>
-                                                    </form>
-                                                <?php endif; ?>
                                             <?php elseif($has_ticket): ?>
                                                 <span class="badge bg-secondary p-2 mt-1">Selesai</span>
                                             <?php else: ?>

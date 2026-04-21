@@ -24,6 +24,11 @@ if (isset($role_allowed)) {
 
 $role     = $_SESSION['role'];
 $cur_page = basename($_SERVER['PHP_SELF']);
+
+// Auto-cancel pending orders > 24 jam (hanya untuk user)
+if (isset($_SESSION['role']) && $_SESSION['role'] === 'user') {
+    require_once __DIR__ . '/../user/auto_cancel.php';
+}
 ?>
 <!DOCTYPE html>
 <html lang="id" data-bs-theme="dark">
@@ -60,6 +65,34 @@ $cur_page = basename($_SERVER['PHP_SELF']);
             }
         });
     }
+
+    <?php if (!empty($_SESSION['auto_cancelled_events'])): ?>
+    // Tampilkan alert auto-cancel setelah halaman selesai dimuat
+    window.addEventListener('DOMContentLoaded', function() {
+        const cancelledEvents = <?= json_encode($_SESSION['auto_cancelled_events']) ?>;
+        const eventList = cancelledEvents.map(e => `<li class="text-start">🎫 ${e}</li>`).join('');
+        Swal.fire({
+            title: '<span style="font-size:1.1rem">⏰ Pesanan Kedaluwarsa</span>',
+            html: `
+                <p style="font-size:0.9rem;color:#94a3b8;margin-bottom:0.75rem">
+                    Pesanan berikut otomatis <strong style="color:#f87171">dibatalkan</strong> karena belum dibayar dalam <strong>24 jam</strong>:
+                </p>
+                <ul style="list-style:none;padding:0;margin:0;font-size:0.9rem;color:#f1f5f9">${eventList}</ul>
+                <p style="font-size:0.8rem;color:#64748b;margin-top:0.75rem;margin-bottom:0">
+                    Kuota tiket telah dikembalikan. Anda dapat memesan ulang.
+                </p>
+            `,
+            icon: 'warning',
+            background: '#1e293b',
+            color: '#f8fafc',
+            confirmButtonColor: '#818cf8',
+            confirmButtonText: 'Mengerti'
+        });
+    });
+    <?php
+        unset($_SESSION['auto_cancelled_events']); // hapus setelah ditampilkan
+    endif;
+    ?>
     </script>
 
     <style>
