@@ -30,6 +30,25 @@ if($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['checkout'])) {
                 throw new Exception("Mohon maaf, Kuota tiket tidak mencukupi untuk pesanan anda.");
             }
 
+            // Validasi batas maksimal 5 tiket per user per event
+            $cek_user_tickets = $conn->query("
+                SELECT SUM(od.qty) as total_qty
+                FROM orders o
+                JOIN order_detail od ON o.id_order = od.id_order
+                JOIN tiket t ON od.id_tiket = t.id_tiket
+                WHERE o.id_user = $id_user AND t.id_event = $id_event AND o.status != 'cancelled'
+            ")->fetch_assoc();
+            
+            $total_sebelumnya = (int)$cek_user_tickets['total_qty'];
+            if (($total_sebelumnya + $qty) > 5) {
+                $sisa_kuota_user = 5 - $total_sebelumnya;
+                if ($sisa_kuota_user > 0) {
+                    throw new Exception("Anda hanya dapat membeli maksimal $sisa_kuota_user tiket lagi untuk event ini (Batas 5 tiket/event).");
+                } else {
+                    throw new Exception("Anda telah mencapai batas maksimal pembelian tiket untuk event ini (5 tiket).");
+                }
+            }
+
             $harga_satuan = (float)$cek_tiket['harga'];
             $subtotal = $harga_satuan * $qty;
             $diskon = 0;
@@ -108,6 +127,18 @@ if(!$event) {
 
 $tikets = $conn->query("SELECT * FROM tiket WHERE id_event=$id_event ORDER BY harga ASC");
 $vouchers = $conn->query("SELECT kode_voucher, diskon, kuota FROM voucher WHERE status='active' AND kuota > 0 ORDER BY diskon DESC LIMIT 3");
+
+// Cek jatah tiket user
+$cek_user_tickets = $conn->query("
+    SELECT SUM(od.qty) as total_qty
+    FROM orders o
+    JOIN order_detail od ON o.id_order = od.id_order
+    JOIN tiket t ON od.id_tiket = t.id_tiket
+    WHERE o.id_user = $id_user AND t.id_event = $id_event AND o.status != 'cancelled'
+")->fetch_assoc();
+$tiket_dimiliki = (int)$cek_user_tickets['total_qty'];
+$max_beli = 5 - $tiket_dimiliki;
+if($max_beli < 0) $max_beli = 0;
 ?>
 
 <div class="container mt-4 mb-5">
@@ -174,7 +205,8 @@ $vouchers = $conn->query("SELECT kode_voucher, diskon, kuota FROM voucher WHERE 
                         
                         <div class="mb-4">
                             <label class="form-label text-white-50">Kuantitas</label>
-                            <input type="number" class="form-control bg-dark text-white border-secondary" name="qty" id="qty" min="1" value="1" required oninput="calcTotal()">
+                            <input type="number" class="form-control bg-dark text-white border-secondary" name="qty" id="qty" min="1" max="<?= $max_beli ?>" value="<?= $max_beli > 0 ? 1 : 0 ?>" required oninput="calcTotal()" <?= $max_beli <= 0 ? 'disabled' : '' ?>>
+                            <small class="text-info mt-1 d-block"><i class="bi bi-info-circle me-1"></i>Maks. 5 tiket/event. (Sisa jatah Anda: <?= $max_beli ?>)</small>
                         </div>
 
                         <div class="mb-4">
@@ -234,6 +266,11 @@ function calcTotal() {
     const kuota = parseInt(option.getAttribute('data-kuota'));
     
     if(qty > kuota) {
+        errObj.innerText = "Kuota tiket tidak mencukupi atau habis!";
+        errObj.classList.remove('d-none');
+        btn.disabled = true;
+    } else if (qty > <?= $max_beli ?>) {
+        errObj.innerText = "Melebihi sisa jatah pembelian Anda (<?= $max_beli ?> tiket).";
         errObj.classList.remove('d-none');
         btn.disabled = true;
     } else {

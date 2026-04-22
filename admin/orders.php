@@ -10,10 +10,12 @@ if(isset($_GET['export']) && $_GET['export'] == 'csv') {
 
     $search        = isset($_GET['search'])  ? $conn->real_escape_string($_GET['search'])  : '';
     $filter_status = isset($_GET['status'])  ? $conn->real_escape_string($_GET['status'])  : '';
+    $filter_event  = isset($_GET['event']) ? (int)$_GET['event'] : '';
 
     $where_sql = "1=1";
     if($search)        $where_sql .= " AND (o.id_order LIKE '%$search%' OR u.nama_lengkap LIKE '%$search%' OR u.email LIKE '%$search%')";
     if($filter_status) $where_sql .= " AND o.status = '$filter_status'";
+    if($filter_event)  $where_sql .= " AND o.id_order IN (SELECT id_order FROM order_detail od JOIN tiket t ON od.id_tiket = t.id_tiket WHERE t.id_event = $filter_event)";
 
     // BOM UTF-8 agar Excel tidak salah baca karakter
     header('Content-Type: text/csv; charset=utf-8');
@@ -50,10 +52,12 @@ require_once '../includes/header.php';
 // Filter & Search — digunakan untuk query halaman maupun stats
 $search        = isset($_GET['search']) ? $conn->real_escape_string($_GET['search']) : '';
 $filter_status = isset($_GET['status']) ? $conn->real_escape_string($_GET['status']) : '';
+$filter_event  = isset($_GET['event']) ? (int)$_GET['event'] : '';
 
 $where_sql = "1=1";
 if($search)        $where_sql .= " AND (o.id_order LIKE '%$search%' OR u.nama_lengkap LIKE '%$search%' OR u.email LIKE '%$search%')";
 if($filter_status) $where_sql .= " AND o.status = '$filter_status'";
+if($filter_event)  $where_sql .= " AND o.id_order IN (SELECT id_order FROM order_detail od JOIN tiket t ON od.id_tiket = t.id_tiket WHERE t.id_event = $filter_event)";
 
 $msg = '';
 
@@ -135,6 +139,9 @@ $stats_query = "
     WHERE $where_sql
 ";
 $stats = $conn->query($stats_query)->fetch_assoc();
+
+// Data untuk dropdown filter event
+$events = $conn->query("SELECT id_event, nama_event FROM event ORDER BY tanggal_event DESC");
 ?>
 
 <!-- START HTML -->
@@ -147,12 +154,21 @@ $stats = $conn->query($stats_query)->fetch_assoc();
 
     <div class="col-12 mb-3 d-print-none">
         <div class="card p-3 shadow-lg">
-            <form action="" method="GET" class="row gx-3 gy-2 align-items-center">
-                <div class="col-md-4">
+            <form action="" method="GET" class="row gx-2 gy-2 align-items-center">
+                <div class="col-md-3">
                     <label class="form-label text-white-50 mb-1"><small>Cari (ID/Nama/Email)</small></label>
                     <input type="text" name="search" class="form-control form-control-sm border-secondary bg-transparent text-white" value="<?= htmlspecialchars($search) ?>" placeholder="Kata kunci...">
                 </div>
-                <div class="col-md-4">
+                <div class="col-md-3">
+                    <label class="form-label text-white-50 mb-1"><small>Filter Event</small></label>
+                    <select name="event" class="form-select form-select-sm border-secondary bg-dark text-white">
+                        <option value="">-- Semua Event --</option>
+                        <?php while($ev = $events->fetch_assoc()): ?>
+                            <option value="<?= $ev['id_event'] ?>" <?= $filter_event == $ev['id_event'] ? 'selected' : '' ?>><?= htmlspecialchars($ev['nama_event']) ?></option>
+                        <?php endwhile; ?>
+                    </select>
+                </div>
+                <div class="col-md-3">
                     <label class="form-label text-white-50 mb-1"><small>Filter Status</small></label>
                     <select name="status" class="form-select form-select-sm border-secondary bg-dark text-white">
                         <option value="">-- Semua Status --</option>
@@ -161,15 +177,55 @@ $stats = $conn->query($stats_query)->fetch_assoc();
                         <option value="cancelled" <?= $filter_status == 'cancelled' ? 'selected' : '' ?>>Cancelled (Batal)</option>
                     </select>
                 </div>
-                <div class="col-md-4 d-flex align-items-end gap-2 mt-4 mt-md-0">
+                <div class="col-md-3 d-flex align-items-end gap-2 mt-4 mt-md-0">
                     <button type="submit" class="btn btn-sm btn-primary flex-grow-1"><i class="bi bi-filter"></i> Filter</button>
                     <a href="orders.php" class="btn btn-sm btn-outline-secondary" title="Reset"><i class="bi bi-arrow-clockwise"></i></a>
                 </div>
             </form>
             
+            <?php if($filter_event): ?>
+                <?php
+                    $q_terjual = $conn->query("
+                        SELECT COUNT(a.id_attendee) as terjual 
+                        FROM attendee a 
+                        JOIN order_detail od ON a.id_order_detail = od.id_detail 
+                        JOIN tiket t ON od.id_tiket = t.id_tiket 
+                        JOIN orders o ON od.id_order = o.id_order 
+                        WHERE t.id_event = $filter_event AND o.status = 'paid'
+                    ")->fetch_assoc()['terjual'];
+                    $q_sisa = $conn->query("SELECT SUM(kuota) as sisa FROM tiket WHERE id_event = $filter_event")->fetch_assoc()['sisa'];
+                    $q_kategori = $conn->query("SELECT nama_tiket, kuota FROM tiket WHERE id_event = $filter_event ORDER BY harga ASC");
+                    $q_pendapatan = $conn->query("
+                        SELECT SUM(o.total) as pendapatan
+                        FROM orders o
+                        JOIN order_detail od ON o.id_order = od.id_order
+                        JOIN tiket t ON od.id_tiket = t.id_tiket
+                        WHERE t.id_event = $filter_event AND o.status = 'paid'
+                    ")->fetch_assoc()['pendapatan'];
+                ?>
+                <div class="alert alert-success mt-3 mb-0 py-2 border-success bg-success bg-opacity-10 text-success">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <i class="bi bi-info-circle-fill me-2"></i> 
+                            <strong>Info Tiket Event:</strong> Terjual <span class="badge bg-success mx-1"><?= (int)$q_terjual ?></span> 
+                            | Total Sisa <span class="badge bg-info mx-1 text-dark"><?= (int)$q_sisa ?></span>
+                            | Pendapatan <span class="badge bg-success mx-1">Rp <?= number_format((float)$q_pendapatan, 0, ',', '.') ?></span>
+                        </div>
+                    </div>
+                    <?php if($q_kategori->num_rows > 0): ?>
+                        <div class="mt-2 pt-2 border-top border-success border-opacity-25">
+                            <small class="fw-semibold me-2">Sisa Per Kategori:</small>
+                            <?php while($kat = $q_kategori->fetch_assoc()): ?>
+                                <span class="badge bg-dark border border-success border-opacity-50 text-white me-1 mb-1 fw-normal"><?= htmlspecialchars($kat['nama_tiket']) ?>: <strong class="text-info"><?= $kat['kuota'] ?></strong></span>
+                            <?php endwhile; ?>
+                        </div>
+                    <?php endif; ?>
+                </div>
+            <?php endif; ?>
+            
             <hr class="border-secondary mb-2 mt-3">
             <div class="text-end">
-                <a href="?export=csv&search=<?=urlencode($search)?>&status=<?=urlencode($filter_status)?>" class="btn btn-sm btn-success"><i class="bi bi-file-earmark-excel"></i> Export Excel (CSV)</a>
+                <a href="?export=csv&search=<?=urlencode($search)?>&status=<?=urlencode($filter_status)?>&event=<?=urlencode($filter_event)?>" class="btn btn-sm btn-success"><i class="bi bi-file-earmark-excel"></i> Export Excel (CSV)</a>
                 <button onclick="window.print()" class="btn btn-sm btn-danger"><i class="bi bi-file-pdf"></i> Cetak Laporan (PDF)</button>
             </div>
         </div>
@@ -294,17 +350,17 @@ $stats = $conn->query($stats_query)->fetch_assoc();
                         <ul class="pagination pagination-sm justify-content-center mb-0" data-bs-theme="dark">
                             <!-- Prev -->
                             <li class="page-item <?= ($page <= 1) ? 'disabled' : '' ?>">
-                                <a class="page-link bg-dark text-white border-secondary" href="?page=<?= $page - 1 ?>&search=<?=urlencode($search)?>&status=<?=urlencode($filter_status)?>">&laquo;</a>
+                                <a class="page-link bg-dark text-white border-secondary" href="?page=<?= $page - 1 ?>&search=<?=urlencode($search)?>&status=<?=urlencode($filter_status)?>&event=<?=urlencode($filter_event)?>">&laquo;</a>
                             </li>
                             <!-- Num -->
                             <?php for($i=1; $i<=$total_pages; $i++): ?>
                                 <li class="page-item <?= ($page == $i) ? 'active' : '' ?>">
-                                    <a class="page-link <?= ($page == $i) ? 'bg-primary border-primary text-white' : 'bg-dark text-white border-secondary' ?>" href="?page=<?= $i ?>&search=<?=urlencode($search)?>&status=<?=urlencode($filter_status)?>"><?= $i ?></a>
+                                    <a class="page-link <?= ($page == $i) ? 'bg-primary border-primary text-white' : 'bg-dark text-white border-secondary' ?>" href="?page=<?= $i ?>&search=<?=urlencode($search)?>&status=<?=urlencode($filter_status)?>&event=<?=urlencode($filter_event)?>"><?= $i ?></a>
                                 </li>
                             <?php endfor; ?>
                             <!-- Next -->
                             <li class="page-item <?= ($page >= $total_pages) ? 'disabled' : '' ?>">
-                                <a class="page-link bg-dark text-white border-secondary" href="?page=<?= $page + 1 ?>&search=<?=urlencode($search)?>&status=<?=urlencode($filter_status)?>">&raquo;</a>
+                                <a class="page-link bg-dark text-white border-secondary" href="?page=<?= $page + 1 ?>&search=<?=urlencode($search)?>&status=<?=urlencode($filter_status)?>&event=<?=urlencode($filter_event)?>">&raquo;</a>
                             </li>
                         </ul>
                     </nav>

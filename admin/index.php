@@ -25,12 +25,18 @@ $recent_orders = $conn->query("
     ORDER BY o.tanggal_order DESC LIMIT 5
 ");
 
-$upcoming_events = $conn->query("
-    SELECT e.nama_event, e.tanggal_event, v.nama_venue 
+$bestselling_events = $conn->query("
+    SELECT e.nama_event, v.nama_venue, 
+        (
+            SELECT IFNULL(SUM(od.qty), 0) 
+            FROM order_detail od 
+            JOIN tiket t ON od.id_tiket = t.id_tiket 
+            JOIN orders o ON od.id_order = o.id_order 
+            WHERE t.id_event = e.id_event AND o.status = 'paid'
+        ) as total_terjual
     FROM event e 
     JOIN venue v ON e.id_venue = v.id_venue 
-    WHERE e.tanggal_event >= CURDATE() 
-    ORDER BY e.tanggal_event ASC LIMIT 4
+    ORDER BY total_terjual DESC LIMIT 4
 ");
 ?>
 
@@ -76,13 +82,13 @@ $upcoming_events = $conn->query("
     <div class="col-lg-4">
         <div class="card shadow-lg border-secondary h-100" style="border-radius:12px; overflow:hidden;">
             <div class="card-header bg-dark text-white border-bottom border-secondary d-flex justify-content-between align-items-center">
-                <h5 class="mb-0 fs-6"><i class="bi bi-calendar-event me-2 text-warning"></i>Event Mendatang</h5>
+                <h5 class="mb-0 fs-6"><i class="bi bi-star-fill me-2 text-warning"></i>Event Terlaris</h5>
                 <a href="event.php" class="btn btn-sm btn-outline-secondary py-0" style="font-size:0.75rem;">Selengkapnya</a>
             </div>
             <div class="card-body p-0" style="background: rgba(15,23,42,0.4);">
                 <ul class="list-group list-group-flush">
-                    <?php if($upcoming_events->num_rows > 0): ?>
-                        <?php while($ev = $upcoming_events->fetch_assoc()): ?>
+                    <?php if($bestselling_events->num_rows > 0): ?>
+                        <?php while($ev = $bestselling_events->fetch_assoc()): ?>
                             <li class="list-group-item bg-transparent text-white border-secondary py-3">
                                 <div class="d-flex justify-content-between align-items-center">
                                     <div>
@@ -90,13 +96,13 @@ $upcoming_events = $conn->query("
                                         <small class="text-white-50"><i class="bi bi-geo-alt me-1"></i><?= htmlspecialchars($ev['nama_venue']) ?></small>
                                     </div>
                                     <div class="text-end">
-                                        <span class="badge" style="background:rgba(16,185,129,0.15);color:#34d399;font-size:0.7rem;"><?= date('d M Y', strtotime($ev['tanggal_event'])) ?></span>
+                                        <span class="badge" style="background:rgba(245,158,11,0.15);color:#fbbf24;font-size:0.75rem;"><i class="bi bi-ticket-perforated me-1"></i><?= (int)$ev['total_terjual'] ?> Terjual</span>
                                     </div>
                                 </div>
                             </li>
                         <?php endwhile; ?>
                     <?php else: ?>
-                        <li class="list-group-item bg-transparent text-white-50 text-center py-4">Belum ada event mendatang.</li>
+                        <li class="list-group-item bg-transparent text-white-50 text-center py-4">Belum ada data event.</li>
                     <?php endif; ?>
                 </ul>
             </div>
