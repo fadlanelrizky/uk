@@ -2,11 +2,17 @@
 require_once 'config/database.php';
 
 // Get Current Data Event
+$search_query = isset($_GET['q']) ? $conn->real_escape_string($_GET['q']) : '';
+$where_sql = "e.tanggal_event >= CURDATE()";
+if (!empty($search_query)) {
+    $where_sql .= " AND (e.nama_event LIKE '%$search_query%' OR v.nama_venue LIKE '%$search_query%' OR v.alamat LIKE '%$search_query%')";
+}
+
 $events = $conn->query("
     SELECT e.*, v.nama_venue, v.alamat 
     FROM event e 
     JOIN venue v ON e.id_venue = v.id_venue 
-    WHERE e.tanggal_event >= CURDATE()
+    WHERE $where_sql
     ORDER BY e.tanggal_event ASC
     LIMIT 6
 ");
@@ -326,7 +332,7 @@ elseif($role == 'petugas') $dashboardLink = 'petugas/index.php';
                     <span class="badge bg-white bg-opacity-10 text-white border border-white border-opacity-25 px-4 py-2 rounded-pill mb-4 fw-medium" style="backdrop-filter: blur(10px); letter-spacing: 0.5px;">
                         Tingkatkan Pengalaman Konsermu 🔥
                     </span>
-                    <h1 class="display-3 fw-bold mb-4 text-white" style="letter-spacing: -1px; text-shadow: 0 4px 20px rgba(0,0,0,0.5);">Berburu Tiket Konser <br>Jadi Lebih Nyata</h1>
+                    <h1 class="display-3 fw-bold mb-4 text-white" style="letter-spacing: -1px; text-shadow: 0 4px 20px rgba(0,0,0,0.5);">Temukan Tiket Konser <br>Favoritmu Dengan Mudah</h1>
                     <p class="lead text-light mb-5 px-lg-5" style="opacity: 0.9; font-size: 1.2rem; text-shadow: 0 2px 10px rgba(0,0,0,0.5);">Platform pembelian tiket konser musik dan festival paling eksklusif. Dapatkan akses cepat ke event artis favoritmu tanpa antrean panjang.</p>
                     <div class="d-flex flex-wrap gap-3 justify-content-center">
                         <a href="#event" class="btn btn-custom btn-lg px-5 shadow-lg">Jelajahi Event</a>
@@ -341,27 +347,40 @@ elseif($role == 'petugas') $dashboardLink = 'petugas/index.php';
 
     <!-- Upcoming Events -->
     <section id="event" class="container py-5">
-        <div class="d-flex justify-content-between align-items-end mb-5">
-            <div>
+        <div class="row align-items-end mb-5 gy-4">
+            <div class="col-lg-6">
                 <h2 class="fw-bold display-6 mb-2">Event <span class="text-gradient">Mendatang</span></h2>
                 <p class="text-white mb-0">Jangan lewatkan konser artis favoritmu</p>
             </div>
-            <?php if($events->num_rows > 0): ?>
-                <a href="<?= $isLoggedIn ? $dashboardLink : 'auth/login.php' ?>" class="btn btn-outline-custom d-none d-md-block">Lihat Semua</a>
-            <?php endif; ?>
+            <div class="col-lg-6">
+                <form action="index.php#event" method="GET" class="d-flex gap-2 justify-content-lg-end">
+                    <input type="text" name="q" class="form-control bg-dark border-secondary text-white shadow-none" placeholder="Cari event atau lokasi..." value="<?= isset($_GET['q']) ? htmlspecialchars($_GET['q']) : '' ?>" style="max-width:300px; border-radius: 50px;">
+                    <button type="submit" class="btn btn-custom rounded-pill px-4"><i class="bi bi-search"></i></button>
+                    <?php if($events->num_rows > 0): ?>
+                        <a href="<?= $isLoggedIn ? $dashboardLink : 'auth/login.php' ?>" class="btn btn-outline-custom d-none d-md-block">Lihat Semua</a>
+                    <?php endif; ?>
+                </form>
+            </div>
         </div>
 
         <div class="row row-cols-1 row-cols-md-2 row-cols-lg-3 g-4">
             <?php if($events->num_rows > 0): ?>
                 <?php while($e = $events->fetch_assoc()): ?>
                     <?php 
-                        // Get minimum price for label
+                        // Get minimum price and total quota for label
                         $id_event = $e['id_event'];
-                        $harga_min = $conn->query("SELECT MIN(harga) as min_price FROM tiket WHERE id_event=$id_event")->fetch_assoc()['min_price'];
+                        $tiket_info = $conn->query("SELECT MIN(harga) as min_price, SUM(kuota) as total_kuota FROM tiket WHERE id_event=$id_event")->fetch_assoc();
+                        $harga_min = $tiket_info['min_price'];
+                        $is_sold_out = ($tiket_info['total_kuota'] !== null && $tiket_info['total_kuota'] <= 0);
                     ?>
                     <div class="col">
                         <div class="event-card" onclick="window.location.href='<?= $isLoggedIn ? 'user/detail_event.php?id='.$e['id_event'] : 'auth/login.php' ?>'">
                             <div class="card-img-placeholder" style="position:relative;">
+                                <?php if($is_sold_out): ?>
+                                    <div style="position:absolute;top:15px;left:15px;background:rgba(239,68,68,0.9);backdrop-filter:blur(4px);padding:6px 12px;border-radius:8px;color:white;font-weight:bold;font-size:0.8rem;z-index:2;letter-spacing:1px;box-shadow:0 4px 10px rgba(239,68,68,0.3);">
+                                        <i class="bi bi-x-circle-fill me-1"></i>SOLD OUT
+                                    </div>
+                                <?php endif; ?>
                                 <?php
                                     $img_path = 'uploads/events/' . $e['gambar'];
                                     $has_img  = !empty($e['gambar']) && $e['gambar'] !== 'default.jpg' && file_exists($img_path);
@@ -397,10 +416,13 @@ elseif($role == 'petugas') $dashboardLink = 'petugas/index.php';
                 <?php endwhile; ?>
             <?php else: ?>
                 <div class="col-12 py-5 text-center">
-                    <div class="p-5 border border-secondary border-opacity-25 rounded-4 bg-dark bg-opacity-50 inline-block">
-                        <i class="bi bi-calendar-x fs-1 text-muted mb-3"></i>
-                        <h4 class="text-white">Belum ada event saat ini</h4>
-                        <p class="text-muted">Pantau terus website kami untuk update konser terbaru.</p>
+                    <div class="p-5 border border-secondary border-opacity-25 rounded-4 bg-dark bg-opacity-50 d-inline-block">
+                        <i class="bi bi-search fs-1 text-muted mb-3 d-block"></i>
+                        <h4 class="text-white">Event tidak ditemukan</h4>
+                        <p class="text-muted">Coba cari dengan kata kunci lain atau pantau terus update kami.</p>
+                        <?php if(!empty($search_query)): ?>
+                            <a href="index.php#event" class="btn btn-outline-custom mt-2">Lihat Semua Event</a>
+                        <?php endif; ?>
                     </div>
                 </div>
             <?php endif; ?>

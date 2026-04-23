@@ -10,23 +10,22 @@
  * agar bisa ditampilkan sebagai alert ke user yang bersangkutan.
  */
 
-if (isset($conn) && isset($_SESSION['id_user'])) {
-    $id_user = (int)$_SESSION['id_user'];
-
-    // Cari order pending > 24 jam milik user yang sedang login
+if (isset($conn)) {
+    // Cari SEMUA order pending > 24 jam
     $expired = $conn->query("
-        SELECT id_order 
+        SELECT id_order, id_user 
         FROM orders 
         WHERE status = 'pending' 
-          AND id_user = $id_user
           AND tanggal_order < DATE_SUB(NOW(), INTERVAL 24 HOUR)
     ");
 
     if ($expired && $expired->num_rows > 0) {
         $cancelled_events = [];
+        $current_user_id = isset($_SESSION['id_user']) ? (int)$_SESSION['id_user'] : 0;
 
         while ($row = $expired->fetch_assoc()) {
             $id_order = (int)$row['id_order'];
+            $order_user_id = (int)$row['id_user'];
 
             $conn->begin_transaction();
             try {
@@ -41,17 +40,19 @@ if (isset($conn) && isset($_SESSION['id_user'])) {
                     $conn->query("UPDATE tiket SET kuota = kuota + $qty WHERE id_tiket=$id_tiket");
                 }
 
-                // Ambil nama event untuk ditampilkan di alert
-                $info = $conn->query("
-                    SELECT e.nama_event 
-                    FROM order_detail od 
-                    JOIN tiket t ON od.id_tiket = t.id_tiket 
-                    JOIN event e ON t.id_event = e.id_event 
-                    WHERE od.id_order = $id_order 
-                    LIMIT 1
-                ");
-                if ($info && $r = $info->fetch_assoc()) {
-                    $cancelled_events[] = $r['nama_event'];
+                // Jika order ini milik user yang sedang login, kumpulkan nama event untuk notifikasi
+                if ($order_user_id === $current_user_id) {
+                    $info = $conn->query("
+                        SELECT e.nama_event 
+                        FROM order_detail od 
+                        JOIN tiket t ON od.id_tiket = t.id_tiket 
+                        JOIN event e ON t.id_event = e.id_event 
+                        WHERE od.id_order = $id_order 
+                        LIMIT 1
+                    ");
+                    if ($info && $r = $info->fetch_assoc()) {
+                        $cancelled_events[] = $r['nama_event'];
+                    }
                 }
 
                 $conn->commit();
@@ -60,9 +61,14 @@ if (isset($conn) && isset($_SESSION['id_user'])) {
             }
         }
 
-        // Simpan ke session agar bisa ditampilkan sebagai SweetAlert
-        if (!empty($cancelled_events)) {
-            $_SESSION['auto_cancelled_events'] = $cancelled_events;
+        // Simpan ke session agar bisa ditampilkan sebagai SweetAlert untuk user yang sedang aktif
+        if (!empty($cancelled_events) && $current_user_id > 0) {
+            // Jika sudah ada session sebelumnya, gabungkan
+            if(isset($_SESSION['auto_cancelled_events'])){
+                $_SESSION['auto_cancelled_events'] = array_merge($_SESSION['auto_cancelled_events'], $cancelled_events);
+            } else {
+                $_SESSION['auto_cancelled_events'] = $cancelled_events;
+            }
         }
     }
 }

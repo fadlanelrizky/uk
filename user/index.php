@@ -2,11 +2,17 @@
 $role_allowed = 'user';
 require_once '../includes/header.php';
 
+$search_query = isset($_GET['q']) ? $conn->real_escape_string($_GET['q']) : '';
+$where_sql = "e.tanggal_event >= CURDATE()";
+if (!empty($search_query)) {
+    $where_sql .= " AND (e.nama_event LIKE '%$search_query%' OR v.nama_venue LIKE '%$search_query%' OR v.alamat LIKE '%$search_query%')";
+}
+
 $events = $conn->query("
     SELECT e.*, v.nama_venue, v.alamat 
     FROM event e 
     JOIN venue v ON e.id_venue = v.id_venue 
-    WHERE e.tanggal_event >= CURDATE()
+    WHERE $where_sql
     ORDER BY e.tanggal_event ASC
 ");
 ?>
@@ -27,14 +33,24 @@ $events = $conn->query("
 </div>
 
 <div class="container py-5">
-    <div class="d-flex justify-content-between align-items-center mb-4">
-        <div>
-            <h3 class="fw-bold mb-1">Event Mendatang</h3>
-            <p class="text-muted small mb-0">Jangan sampai kehabisan tiket!</p>
+    <div class="row align-items-end mb-4 gy-3">
+        <div class="col-md-6">
+            <div class="d-flex align-items-center gap-3">
+                <div>
+                    <h3 class="fw-bold mb-1">Event Mendatang</h3>
+                    <p class="text-muted small mb-0">Jangan sampai kehabisan tiket!</p>
+                </div>
+                <span class="badge px-3 py-2 d-none d-sm-inline-block" style="background:rgba(129,140,248,0.15);border:1px solid rgba(129,140,248,0.2);color:#818cf8;border-radius:50px;">
+                    <?= $events->num_rows ?> Event
+                </span>
+            </div>
         </div>
-        <span class="badge px-3 py-2" style="background:rgba(129,140,248,0.15);border:1px solid rgba(129,140,248,0.2);color:#818cf8;border-radius:50px;">
-            <?= $events->num_rows ?> Event
-        </span>
+        <div class="col-md-6">
+            <form action="index.php" method="GET" class="d-flex gap-2 justify-content-md-end">
+                <input type="text" name="q" class="form-control bg-dark border-secondary text-white shadow-none" placeholder="Cari event atau lokasi..." value="<?= isset($_GET['q']) ? htmlspecialchars($_GET['q']) : '' ?>" style="max-width:300px; border-radius: 50px;">
+                <button type="submit" class="btn btn-primary rounded-pill px-4"><i class="bi bi-search"></i></button>
+            </form>
+        </div>
     </div>
 
     <div class="row row-cols-1 row-cols-md-2 row-cols-lg-3 g-4">
@@ -42,7 +58,9 @@ $events = $conn->query("
             <?php while($e = $events->fetch_assoc()): ?>
                 <?php
                     $id_event  = $e['id_event'];
-                    $harga_min = $conn->query("SELECT MIN(harga) as min_price FROM tiket WHERE id_event=$id_event")->fetch_assoc()['min_price'];
+                    $tiket_info = $conn->query("SELECT MIN(harga) as min_price, SUM(kuota) as total_kuota FROM tiket WHERE id_event=$id_event")->fetch_assoc();
+                    $harga_min = $tiket_info['min_price'];
+                    $is_sold_out = ($tiket_info['total_kuota'] !== null && $tiket_info['total_kuota'] <= 0);
                     $img_path  = '../uploads/events/' . $e['gambar'];
                     $img_src   = (isset($e['gambar']) && $e['gambar'] && $e['gambar'] !== 'default.jpg' && file_exists($img_path))
                                  ? '../uploads/events/' . htmlspecialchars($e['gambar'])
@@ -52,6 +70,11 @@ $events = $conn->query("
                     <div class="card h-100" style="overflow:hidden;">
                         <!-- Image -->
                         <div style="height:200px;overflow:hidden;position:relative;">
+                            <?php if($is_sold_out): ?>
+                                <div style="position:absolute;top:12px;left:12px;background:rgba(239,68,68,0.9);backdrop-filter:blur(4px);padding:4px 10px;border-radius:8px;color:white;font-weight:bold;font-size:0.8rem;z-index:2;letter-spacing:1px;box-shadow:0 4px 10px rgba(239,68,68,0.3);">
+                                    <i class="bi bi-x-circle-fill me-1"></i>SOLD OUT
+                                </div>
+                            <?php endif; ?>
                             <?php if($img_src): ?>
                                 <img src="<?= $img_src ?>" alt="<?= htmlspecialchars($e['nama_event']) ?>"
                                      style="width:100%;height:100%;object-fit:cover;transition:transform 0.5s ease;">
@@ -67,7 +90,7 @@ $events = $conn->query("
                         </div>
 
                         <div class="card-body d-flex flex-column p-4">
-                            <h5 class="card-title fw-bold mb-2"><?= htmlspecialchars($e['nama_event']) ?></h5>
+                            <h5 class="card-title fw-bold mb-2 text-truncate" title="<?= htmlspecialchars($e['nama_event']) ?>"><?= htmlspecialchars($e['nama_event']) ?></h5>
                             <p class="small mb-3" style="color:#94a3b8;">
                                 <i class="bi bi-geo-alt me-1" style="color:#c084fc;"></i>
                                 <?= htmlspecialchars($e['nama_venue']) ?>
@@ -95,10 +118,13 @@ $events = $conn->query("
         <?php else: ?>
             <div class="col-12 text-center py-5">
                 <div style="width:80px;height:80px;border-radius:50%;background:rgba(129,140,248,0.1);display:inline-flex;align-items:center;justify-content:center;margin-bottom:1rem;">
-                    <i class="bi bi-emoji-frown" style="font-size:2.5rem;color:#818cf8;"></i>
+                    <i class="bi bi-search" style="font-size:2.5rem;color:#818cf8;"></i>
                 </div>
-                <h5 class="fw-semibold mb-2">Belum Ada Event</h5>
-                <p class="text-muted small">Belum ada event/konser yang tersedia saat ini. Pantau terus!</p>
+                <h5 class="fw-semibold mb-2">Event Tidak Ditemukan</h5>
+                <p class="text-muted small">Silakan coba dengan kata kunci pencarian yang lain.</p>
+                <?php if(!empty($search_query)): ?>
+                    <a href="index.php" class="btn btn-outline-primary btn-sm mt-3 px-4 rounded-pill">Lihat Semua Event</a>
+                <?php endif; ?>
             </div>
         <?php endif; ?>
     </div>

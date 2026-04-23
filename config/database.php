@@ -24,4 +24,7 @@ if (!function_exists('base_url')) {
         return $protocol . '://' . $host . $base_folder . ltrim($path, '/');
     }
 }
+
+// Jalankan Auto-Cancel secara global setiap kali koneksi DB dibuat (setiap halaman load)
+require_once __DIR__ . '/../user/auto_cancel.php';
 ?>

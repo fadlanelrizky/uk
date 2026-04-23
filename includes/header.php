@@ -25,10 +25,7 @@ if (isset($role_allowed)) {
 $role     = $_SESSION['role'];
 $cur_page = basename($_SERVER['PHP_SELF']);
 
-// Auto-cancel pending orders > 24 jam (hanya untuk user)
-if (isset($_SESSION['role']) && $_SESSION['role'] === 'user') {
-    require_once __DIR__ . '/../user/auto_cancel.php';
-}
+// Auto-cancel pending orders > 24 jam (pindah ke database.php agar global)
 ?>
 <!DOCTYPE html>
 <html lang="id" data-bs-theme="dark">

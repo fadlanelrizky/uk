@@ -143,7 +143,17 @@ if($max_beli < 0) $max_beli = 0;
 
 <div class="container mt-4 mb-5">
     <?php if($err): ?>
-        <div class="alert alert-danger"><?= $err ?></div>
+        <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            Swal.fire({
+                title: 'Gagal!',
+                text: '<?= addslashes($err) ?>',
+                icon: 'error',
+                background: '#1a1a24', color: '#f8fafc',
+                confirmButtonColor: '#ec4899'
+            });
+        });
+        </script>
     <?php endif; ?>
 
     <div class="row">
@@ -177,30 +187,54 @@ if($max_beli < 0) $max_beli = 0;
                     <h4 class="mb-4 text-center">Beli Tiket</h4>
                     
                     <?php if($vouchers && $vouchers->num_rows > 0): ?>
-                        <div class="alert alert-info border-info bg-info bg-opacity-10 py-2 px-3 mb-4">
-                            <h6 class="alert-heading fw-bold mb-2 text-info"><i class="bi bi-tags-fill me-1"></i> Promo Spesial!</h6>
-                            <ul class="mb-0 ps-3 small text-white-50" style="list-style-type: square;">
+                        <div class="alert alert-info border-info bg-info bg-opacity-10 py-3 px-3 mb-4 rounded-3">
+                            <h6 class="alert-heading fw-bold mb-3 text-info"><i class="bi bi-tags-fill me-1"></i> Promo Spesial! (Klik untuk pakai)</h6>
+                            <div class="d-flex flex-wrap gap-2">
                             <?php while($v = $vouchers->fetch_assoc()): ?>
-                                <li>Kode <b class="text-white bg-dark px-1 rounded border border-secondary"><?= $v['kode_voucher'] ?></b> diskon Rp <?= number_format($v['diskon'], 0, ',', '.') ?> (Sisa <?= $v['kuota'] ?>)</li>
+                                <button type="button" class="btn btn-sm btn-outline-info border-info border-opacity-50 text-start btn-apply-voucher" data-kode="<?= htmlspecialchars($v['kode_voucher']) ?>" style="background: rgba(13,202,240,0.05);">
+                                    <div class="fw-bold fs-6"><?= htmlspecialchars($v['kode_voucher']) ?></div>
+                                    <div class="small text-white-50">Diskon Rp <?= number_format($v['diskon'], 0, ',', '.') ?> (Sisa <?= $v['kuota'] ?>)</div>
+                                </button>
                             <?php endwhile; ?>
-                            </ul>
+                            </div>
                         </div>
                     <?php endif; ?>
                     
-                    <form action="" method="POST" id="form-checkout">
+                    <form action="" method="POST" id="form-checkout" onsubmit="
+                        const btn = document.getElementById('btn-submit');
+                        btn.disabled = true;
+                        btn.innerHTML = '<span class=\'spinner-border spinner-border-sm me-2\'></span>Memproses...';
+                    ">
                         <input type="hidden" name="checkout" value="1">
                         
                         <div class="mb-4">
-                            <label class="form-label text-white-50">Kategori Tiket</label>
-                            <select class="form-select bg-dark text-white border-secondary" name="id_tiket" id="pilih-tiket" required onchange="calcTotal()">
-                                <option value="">-- Pilih Tiket --</option>
+                            <label class="form-label text-white-50 mb-3">Kategori Tiket</label>
+                            <div class="row g-3">
                                 <?php while($t = $tikets->fetch_assoc()): ?>
-                                    <option value="<?= $t['id_tiket'] ?>" data-harga="<?= $t['harga'] ?>" data-kuota="<?= $t['kuota'] ?>" <?= $t['kuota'] <= 0 ? 'disabled' : '' ?>>
-                                        <?= htmlspecialchars($t['nama_tiket']) ?> - Rp <?= number_format($t['harga'], 0, ',', '.') ?> <?= $t['kuota'] <= 0 ? '(HABIS)' : '(Sisa: ' . $t['kuota'] . ')' ?>
-                                    </option>
+                                    <?php 
+                                        $is_habis = $t['kuota'] <= 0;
+                                        $sisa_teks = $is_habis ? 'HABIS' : ($t['kuota'] <= 10 ? 'Sisa ' . $t['kuota'] . ' Tiket!' : 'Sisa ' . $t['kuota'] . ' Tiket');
+                                        $sisa_class = $is_habis ? 'text-danger fw-bold' : ($t['kuota'] <= 10 ? 'text-warning fw-bold' : 'text-success');
+                                    ?>
+                                    <div class="col-12">
+                                        <label class="w-100" style="<?= !$is_habis ? 'cursor:pointer;' : 'opacity:0.6;' ?>">
+                                            <input type="radio" name="id_tiket" class="d-none ticket-radio" value="<?= $t['id_tiket'] ?>" data-harga="<?= $t['harga'] ?>" data-kuota="<?= $t['kuota'] ?>" <?= $is_habis ? 'disabled' : '' ?> onchange="calcTotal()" required>
+                                            <div class="card bg-dark border-secondary ticket-card transition-all">
+                                                <div class="card-body p-3 d-flex justify-content-between align-items-center">
+                                                    <div>
+                                                        <h6 class="fw-bold mb-1 text-white"><?= htmlspecialchars($t['nama_tiket']) ?></h6>
+                                                        <div class="text-primary fw-bold">Rp <?= number_format($t['harga'], 0, ',', '.') ?></div>
+                                                    </div>
+                                                    <div class="text-end">
+                                                        <small class="<?= $sisa_class ?>"><?= $sisa_teks ?></small>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </label>
+                                    </div>
                                 <?php endwhile; ?>
-                            </select>
-                            <small class="text-danger d-none mt-1" id="err-kuota">Kuota tiket tidak mencukupi atau habis!</small>
+                            </div>
+                            <small class="text-danger d-none mt-2 d-block" id="err-kuota"></small>
                         </div>
                         
                         <div class="mb-4">
@@ -211,10 +245,7 @@ if($max_beli < 0) $max_beli = 0;
 
                         <div class="mb-4">
                             <label class="form-label text-white-50">Kode Promo / Voucher (Opsional)</label>
-                            <div class="input-group">
-                                <input type="text" class="form-control bg-dark text-white border-secondary" name="voucher" id="voucher-input" placeholder="Masukkan jika ada">
-                                <button type="button" class="btn btn-outline-primary" id="btn-cek-voucher">Gunakan</button>
-                            </div>
+                            <input type="text" class="form-control bg-dark text-white border-secondary" name="voucher" id="voucher-input" placeholder="Masukkan atau tempel kode di sini">
                             <small id="voucher-msg" class="d-block mt-1"></small>
                         </div>
 
@@ -233,7 +264,9 @@ if($max_beli < 0) $max_beli = 0;
                             </li>
                         </ul>
 
-                        <button type="submit" class="btn btn-primary w-100 py-3 fw-bold fs-5 shadow" id="btn-submit" disabled>Checkout & Bayar</button>
+                        <div class="sticky-mobile-checkout">
+                            <button type="submit" class="btn btn-primary w-100 py-3 fw-bold fs-5 shadow" id="btn-submit" disabled>Checkout & Bayar</button>
+                        </div>
                     </form>
 
                 </div>
@@ -247,13 +280,24 @@ let nilaiDiskon = 0;
 let isVoucherValid = false;
 
 function calcTotal() {
-    const sel = document.getElementById('pilih-tiket');
+    const selectedTicket = document.querySelector('input[name="id_tiket"]:checked');
     const qty = parseInt(document.getElementById('qty').value) || 0;
     const btn = document.getElementById('btn-submit');
     const errObj = document.getElementById('err-kuota');
     const formatRp = (num) => new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(Math.abs(num));
     
-    if(sel.selectedIndex === 0 || qty <= 0) {
+    // Update active style for radio cards
+    document.querySelectorAll('.ticket-card').forEach(el => {
+        el.classList.remove('border-primary', 'bg-primary', 'bg-opacity-10');
+        el.classList.add('border-secondary', 'bg-dark');
+    });
+    if(selectedTicket) {
+        const card = selectedTicket.nextElementSibling;
+        card.classList.remove('border-secondary', 'bg-dark');
+        card.classList.add('border-primary', 'bg-primary', 'bg-opacity-10');
+    }
+
+    if(!selectedTicket || qty <= 0) {
         document.getElementById('text-subtotal').innerText = 'Rp 0';
         document.getElementById('text-total').innerText = 'Rp 0';
         document.getElementById('row-diskon').classList.add('d-none');
@@ -261,9 +305,8 @@ function calcTotal() {
         return;
     }
     
-    const option = sel.options[sel.selectedIndex];
-    const harga = parseFloat(option.getAttribute('data-harga'));
-    const kuota = parseInt(option.getAttribute('data-kuota'));
+    const harga = parseFloat(selectedTicket.getAttribute('data-harga'));
+    const kuota = parseInt(selectedTicket.getAttribute('data-kuota'));
     
     if(qty > kuota) {
         errObj.innerText = "Kuota tiket tidak mencukupi atau habis!";
@@ -294,7 +337,8 @@ function calcTotal() {
     document.getElementById('text-total').innerText = formatRp(total); 
 }
 
-document.getElementById('btn-cek-voucher').addEventListener('click', function() {
+let voucherTimeout;
+function checkVoucher() {
     const kode = document.getElementById('voucher-input').value.trim();
     const msgObj = document.getElementById('voucher-msg');
     
@@ -310,9 +354,9 @@ document.getElementById('btn-cek-voucher').addEventListener('click', function() 
     msgObj.innerText = 'Mengecek voucher...';
 
     // Ambil subtotal saat ini untuk validasi diskon di server
-    const selEl = document.getElementById('pilih-tiket');
+    const selectedTicket = document.querySelector('input[name="id_tiket"]:checked');
     const qtyEl = parseInt(document.getElementById('qty').value) || 1;
-    const hargaSatuan = selEl.selectedIndex > 0 ? parseFloat(selEl.options[selEl.selectedIndex].getAttribute('data-harga')) : 0;
+    const hargaSatuan = selectedTicket ? parseFloat(selectedTicket.getAttribute('data-harga')) : 0;
     const subtotalSaatIni = hargaSatuan * qtyEl;
 
     fetch('check_voucher.php?kode=' + encodeURIComponent(kode) + '&harga=' + subtotalSaatIni)
@@ -336,21 +380,58 @@ document.getElementById('btn-cek-voucher').addEventListener('click', function() 
         msgObj.innerText = 'Terjadi kesalahan sistem.';
         console.error(err);
     });
-});
+}
 
 // Bersihkan event qty dan re-calculate saat mengetik kode baru tapi jadi invalid logikanya
 document.getElementById('qty').addEventListener('input', calcTotal);
 
-// Bersihkan diskon jika input dikosongkan
+// Bersihkan diskon jika input dikosongkan, atau cek jika diisi
 document.getElementById('voucher-input').addEventListener('input', function() {
+    clearTimeout(voucherTimeout);
     if(this.value.trim() === '') {
         document.getElementById('voucher-msg').innerText = '';
         nilaiDiskon = 0;
         isVoucherValid = false;
         calcTotal();
+    } else {
+        voucherTimeout = setTimeout(checkVoucher, 600); // 600ms debounce
     }
 });
+
+// Auto-apply voucher when clicking promo buttons
+document.querySelectorAll('.btn-apply-voucher').forEach(btn => {
+    btn.addEventListener('click', function() {
+        const kode = this.getAttribute('data-kode');
+        document.getElementById('voucher-input').value = kode;
+        clearTimeout(voucherTimeout);
+        checkVoucher();
+    });
+});
 </script>
+
+<style>
+.ticket-card { transition: all 0.2s ease-in-out; }
+.ticket-radio:checked + .ticket-card {
+    border-color: #818cf8 !important;
+    background-color: rgba(129,140,248,0.1) !important;
+}
+
+@media (max-width: 767.98px) {
+    .sticky-mobile-checkout {
+        position: fixed;
+        bottom: 0;
+        left: 0;
+        right: 0;
+        z-index: 1040;
+        padding: 1rem;
+        background: #1a1a24;
+        border-top: 1px solid rgba(255,255,255,0.1);
+        border-radius: 20px 20px 0 0;
+        box-shadow: 0 -5px 20px rgba(0,0,0,0.5);
+    }
+    body { padding-bottom: 90px; }
+}
+</style>
 
 <?php require_once '../includes/footer.php'; ?>
 
