@@ -9,6 +9,7 @@ if($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['action'])) {
     $nama = $conn->real_escape_string($_POST['nama_tiket']);
     $harga = (float)$_POST['harga'];
     $kuota = (int)$_POST['kuota'];
+    $max_pembelian = isset($_POST['max_pembelian']) ? (int)$_POST['max_pembelian'] : 5;
 
     // Validasi Kapasitas
     $kapasitas_res = $conn->query("SELECT v.kapasitas FROM event e JOIN venue v ON e.id_venue = v.id_venue WHERE e.id_event = $id_event");
@@ -32,7 +33,7 @@ if($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['action'])) {
                 $msg = "Error: Total kuota tiket ($total_baru) melebihi kapasitas venue ($kapasitas_venue)!";
                 $msg_type = 'danger';
             } else {
-                $conn->query("INSERT INTO tiket (id_event, nama_tiket, harga, kuota) VALUES ($id_event, '$nama', $harga, $kuota)");
+                $conn->query("INSERT INTO tiket (id_event, nama_tiket, harga, kuota, max_pembelian) VALUES ($id_event, '$nama', $harga, $kuota, $max_pembelian)");
                 $msg = "Kategori tiket berhasil ditambahkan!";
             }
         } elseif($_POST['action'] == 'edit') {
@@ -46,7 +47,7 @@ if($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['action'])) {
                 $msg = "Error: Total kuota tiket ($total_baru) melebihi kapasitas venue ($kapasitas_venue)!";
                 $msg_type = 'danger';
             } else {
-                $conn->query("UPDATE tiket SET id_event=$id_event, nama_tiket='$nama', harga=$harga, kuota=$kuota WHERE id_tiket=$id");
+                $conn->query("UPDATE tiket SET id_event=$id_event, nama_tiket='$nama', harga=$harga, kuota=$kuota, max_pembelian=$max_pembelian WHERE id_tiket=$id");
                 $msg = "Kategori tiket berhasil diupdate!";
             }
         }
@@ -79,7 +80,7 @@ $total_rows = $total_res->fetch_assoc()['cnt'];
 $total_pages = ceil($total_rows / $per_page);
 
 $tikets = $conn->query("SELECT t.*, e.nama_event, e.tanggal_event FROM tiket t JOIN event e ON t.id_event = e.id_event WHERE $where_sql ORDER BY e.id_event DESC, t.id_tiket DESC LIMIT $offset, $per_page");
-$events = $conn->query("SELECT e.id_event, e.nama_event, v.kapasitas FROM event e LEFT JOIN venue v ON e.id_venue = v.id_venue ORDER BY e.id_event DESC");
+$events = $conn->query("SELECT e.id_event, e.nama_event, v.kapasitas, COALESCE((SELECT SUM(kuota) FROM tiket WHERE id_event = e.id_event), 0) as terpakai FROM event e LEFT JOIN venue v ON e.id_venue = v.id_venue ORDER BY e.id_event DESC");
 ?>
 
 <div class="row">
@@ -98,9 +99,10 @@ $events = $conn->query("SELECT e.id_event, e.nama_event, v.kapasitas FROM event 
                     <div class="mb-3">
                         <label class="text-white-50">Pilih Event</label>
                         <select class="form-control" name="id_event" id="id_event" required>
-                            <option value="" data-kapasitas="">-- Pilih Event --</option>
+                            <option value="" data-sisa="">-- Pilih Event --</option>
                             <?php while($e = $events->fetch_assoc()): ?>
-                                <option value="<?= $e['id_event'] ?>" data-kapasitas="<?= $e['kapasitas'] ?>"><?= htmlspecialchars($e['nama_event']) ?></option>
+                                <?php $sisa = max(0, $e['kapasitas'] - $e['terpakai']); ?>
+                                <option value="<?= $e['id_event'] ?>" data-sisa="<?= $sisa ?>"><?= htmlspecialchars($e['nama_event']) ?></option>
                             <?php endwhile; ?>
                         </select>
                     </div>
@@ -113,8 +115,12 @@ $events = $conn->query("SELECT e.id_event, e.nama_event, v.kapasitas FROM event 
                         <input type="number" step="1" min="1" class="form-control" name="harga" id="harga" required>
                     </div>
                     <div class="mb-3">
-                        <label class="text-white-50">Kuota Tersedia</label>
+                        <label class="text-white-50">Kuota Tersedia <span id="sisa_kuota_info" class="badge bg-info ms-2 d-none">Sisa: 0</span></label>
                         <input type="number" min="0" class="form-control" name="kuota" id="kuota" required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="text-white-50">Maks. Pembelian/Akun</label>
+                        <input type="number" class="form-control" name="max_pembelian" id="max_pembelian" value="5" min="1" required>
                     </div>
                     
                     <button type="submit" class="btn btn-primary w-100" id="btn-submit">Simpan Tiket</button>
@@ -212,19 +218,35 @@ $events = $conn->query("SELECT e.id_event, e.nama_event, v.kapasitas FROM event 
 
 <script>
 document.getElementById('id_event').addEventListener('change', function() {
+    var selected = this.options[this.selectedIndex];
+    var sisa = selected.getAttribute('data-sisa');
+    var infoSpan = document.getElementById('sisa_kuota_info');
+    
+    if(sisa !== null && sisa !== "") {
+        infoSpan.innerText = 'Sisa Kuota Venue: ' + sisa;
+        infoSpan.classList.remove('d-none');
+    } else {
+        infoSpan.classList.add('d-none');
+    }
+
     if(document.getElementById('form-action').value === 'add') {
-        var selected = this.options[this.selectedIndex];
-        var kapasitas = selected.getAttribute('data-kapasitas');
-        document.getElementById('kuota').value = kapasitas ? kapasitas : '';
+        document.getElementById('kuota').value = sisa ? sisa : '';
     }
 });
 function editTiket(data) {
     document.getElementById('form-action').value = 'edit';
     document.getElementById('id_tiket').value = data.id_tiket;
     document.getElementById('id_event').value = data.id_event;
+    
+    // Trigger change to update sisa kuota badge
+    var eventSelect = document.getElementById('id_event');
+    var event = new Event('change');
+    eventSelect.dispatchEvent(event);
+    
     document.getElementById('nama_tiket').value = data.nama_tiket;
     document.getElementById('harga').value = data.harga;
     document.getElementById('kuota').value = data.kuota;
+    document.getElementById('max_pembelian').value = data.max_pembelian || 5;
     document.getElementById('btn-submit').innerText = 'Update Tiket';
     document.getElementById('btn-submit').classList.replace('btn-primary', 'btn-success');
     document.getElementById('btn-cancel').classList.remove('d-none');
@@ -234,9 +256,16 @@ function resetForm() {
     document.getElementById('form-action').value = 'add';
     document.getElementById('id_tiket').value = '';
     document.getElementById('id_event').value = '';
+    
+    // Trigger change to hide sisa kuota badge
+    var eventSelect = document.getElementById('id_event');
+    var event = new Event('change');
+    eventSelect.dispatchEvent(event);
+
     document.getElementById('nama_tiket').value = '';
     document.getElementById('harga').value = '';
     document.getElementById('kuota').value = '';
+    document.getElementById('max_pembelian').value = '5';
     document.getElementById('btn-submit').innerText = 'Simpan Tiket';
     document.getElementById('btn-submit').classList.replace('btn-success', 'btn-primary');
     document.getElementById('btn-cancel').classList.add('d-none');

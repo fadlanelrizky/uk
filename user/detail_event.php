@@ -24,28 +24,28 @@ if($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['checkout'])) {
         $conn->begin_transaction();
         try {
             // Lock tabel tiket spesifik untuk race condition prevention
-            $cek_tiket = $conn->query("SELECT harga, kuota FROM tiket WHERE id_tiket=$id_tiket FOR UPDATE")->fetch_assoc();
+            $cek_tiket = $conn->query("SELECT harga, kuota, max_pembelian FROM tiket WHERE id_tiket=$id_tiket FOR UPDATE")->fetch_assoc();
             
             if(!$cek_tiket || $cek_tiket['kuota'] < $qty) {
                 throw new Exception("Mohon maaf, Kuota tiket tidak mencukupi untuk pesanan anda.");
             }
 
-            // Validasi batas maksimal 5 tiket per user per event
+            // Validasi batas maksimal tiket per user per kategori tiket
             $cek_user_tickets = $conn->query("
                 SELECT SUM(od.qty) as total_qty
                 FROM orders o
                 JOIN order_detail od ON o.id_order = od.id_order
-                JOIN tiket t ON od.id_tiket = t.id_tiket
-                WHERE o.id_user = $id_user AND t.id_event = $id_event AND o.status != 'cancelled'
+                WHERE o.id_user = $id_user AND od.id_tiket = $id_tiket AND o.status != 'cancelled'
             ")->fetch_assoc();
             
+            $max_per_user = (int)$cek_tiket['max_pembelian'];
             $total_sebelumnya = (int)$cek_user_tickets['total_qty'];
-            if (($total_sebelumnya + $qty) > 5) {
-                $sisa_kuota_user = 5 - $total_sebelumnya;
+            if (($total_sebelumnya + $qty) > $max_per_user) {
+                $sisa_kuota_user = $max_per_user - $total_sebelumnya;
                 if ($sisa_kuota_user > 0) {
-                    throw new Exception("Anda hanya dapat membeli maksimal $sisa_kuota_user tiket lagi untuk event ini (Batas 5 tiket/event).");
+                    throw new Exception("Anda hanya dapat membeli maksimal $sisa_kuota_user tiket lagi untuk kategori ini (Batas $max_per_user tiket/akun).");
                 } else {
-                    throw new Exception("Anda telah mencapai batas maksimal pembelian tiket untuk event ini (5 tiket).");
+                    throw new Exception("Anda telah mencapai batas maksimal pembelian tiket untuk kategori ini ($max_per_user tiket).");
                 }
             }
 
@@ -128,17 +128,19 @@ if(!$event) {
 $tikets = $conn->query("SELECT * FROM tiket WHERE id_event=$id_event ORDER BY harga ASC");
 $vouchers = $conn->query("SELECT kode_voucher, diskon, kuota FROM voucher WHERE status='active' AND kuota > 0 ORDER BY diskon DESC LIMIT 3");
 
-// Cek jatah tiket user
-$cek_user_tickets = $conn->query("
-    SELECT SUM(od.qty) as total_qty
+// Cek jatah tiket user per kategori tiket
+$user_purchases_res = $conn->query("
+    SELECT od.id_tiket, SUM(od.qty) as total_qty
     FROM orders o
     JOIN order_detail od ON o.id_order = od.id_order
     JOIN tiket t ON od.id_tiket = t.id_tiket
     WHERE o.id_user = $id_user AND t.id_event = $id_event AND o.status != 'cancelled'
-")->fetch_assoc();
-$tiket_dimiliki = (int)$cek_user_tickets['total_qty'];
-$max_beli = 5 - $tiket_dimiliki;
-if($max_beli < 0) $max_beli = 0;
+    GROUP BY od.id_tiket
+");
+$user_purchases = [];
+while($up = $user_purchases_res->fetch_assoc()) {
+    $user_purchases[$up['id_tiket']] = (int)$up['total_qty'];
+}
 ?>
 
 <div class="container mt-4 mb-5">
@@ -218,7 +220,7 @@ if($max_beli < 0) $max_beli = 0;
                                     ?>
                                     <div class="col-12">
                                         <label class="w-100" style="<?= !$is_habis ? 'cursor:pointer;' : 'opacity:0.6;' ?>">
-                                            <input type="radio" name="id_tiket" class="d-none ticket-radio" value="<?= $t['id_tiket'] ?>" data-harga="<?= $t['harga'] ?>" data-kuota="<?= $t['kuota'] ?>" <?= $is_habis ? 'disabled' : '' ?> onchange="calcTotal()" required>
+                                            <input type="radio" name="id_tiket" class="d-none ticket-radio" value="<?= $t['id_tiket'] ?>" data-harga="<?= $t['harga'] ?>" data-kuota="<?= $t['kuota'] ?>" data-max-pembelian="<?= $t['max_pembelian'] ?>" data-purchased="<?= isset($user_purchases[$t['id_tiket']]) ? $user_purchases[$t['id_tiket']] : 0 ?>" <?= $is_habis ? 'disabled' : '' ?> onchange="calcTotal()" required>
                                             <div class="card bg-dark border-secondary ticket-card transition-all">
                                                 <div class="card-body p-3 d-flex justify-content-between align-items-center">
                                                     <div>
@@ -239,8 +241,8 @@ if($max_beli < 0) $max_beli = 0;
                         
                         <div class="mb-4">
                             <label class="form-label text-white-50">Kuantitas</label>
-                            <input type="number" class="form-control bg-dark text-white border-secondary" name="qty" id="qty" min="1" max="<?= $max_beli ?>" value="<?= $max_beli > 0 ? 1 : 0 ?>" required oninput="calcTotal()" <?= $max_beli <= 0 ? 'disabled' : '' ?>>
-                            <small class="text-info mt-1 d-block"><i class="bi bi-info-circle me-1"></i>Maks. 5 tiket/event. (Sisa jatah Anda: <?= $max_beli ?>)</small>
+                            <input type="number" class="form-control bg-dark text-white border-secondary" name="qty" id="qty" min="1" max="1" value="1" required oninput="calcTotal()" disabled>
+                            <small class="text-info mt-1 d-block" id="info-max-beli"><i class="bi bi-info-circle me-1"></i>Pilih kategori tiket terlebih dahulu.</small>
                         </div>
 
                         <div class="mb-4">
@@ -281,7 +283,7 @@ let isVoucherValid = false;
 
 function calcTotal() {
     const selectedTicket = document.querySelector('input[name="id_tiket"]:checked');
-    const qty = parseInt(document.getElementById('qty').value) || 0;
+    let qty = parseInt(document.getElementById('qty').value) || 0;
     const btn = document.getElementById('btn-submit');
     const errObj = document.getElementById('err-kuota');
     const formatRp = (num) => new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(Math.abs(num));
@@ -297,23 +299,49 @@ function calcTotal() {
         card.classList.add('border-primary', 'bg-primary', 'bg-opacity-10');
     }
 
-    if(!selectedTicket || qty <= 0) {
+    if(!selectedTicket) {
         document.getElementById('text-subtotal').innerText = 'Rp 0';
         document.getElementById('text-total').innerText = 'Rp 0';
         document.getElementById('row-diskon').classList.add('d-none');
+        document.getElementById('qty').disabled = true;
+        document.getElementById('info-max-beli').innerHTML = '<i class="bi bi-info-circle me-1"></i>Pilih kategori tiket terlebih dahulu.';
         btn.disabled = true;
         return;
     }
     
     const harga = parseFloat(selectedTicket.getAttribute('data-harga'));
     const kuota = parseInt(selectedTicket.getAttribute('data-kuota'));
+    const maxPembelian = parseInt(selectedTicket.getAttribute('data-max-pembelian')) || 5;
+    const purchased = parseInt(selectedTicket.getAttribute('data-purchased')) || 0;
+    
+    let maxBeli = maxPembelian - purchased;
+    if(maxBeli < 0) maxBeli = 0;
+
+    const qtyInput = document.getElementById('qty');
+    qtyInput.disabled = (maxBeli <= 0);
+    qtyInput.max = maxBeli;
+
+    qty = parseInt(qtyInput.value) || 0;
+    if(qty > maxBeli && maxBeli > 0) {
+        qty = maxBeli;
+        qtyInput.value = maxBeli;
+    } else if (qty === 0 && maxBeli > 0) {
+        qty = 1;
+        qtyInput.value = 1;
+    }
+
+    document.getElementById('info-max-beli').innerHTML = `<i class="bi bi-info-circle me-1"></i>Maks. ${maxPembelian} tiket/akun. (Sisa jatah Anda: ${maxBeli})`;
     
     if(qty > kuota) {
         errObj.innerText = "Kuota tiket tidak mencukupi atau habis!";
         errObj.classList.remove('d-none');
         btn.disabled = true;
-    } else if (qty > <?= $max_beli ?>) {
-        errObj.innerText = "Melebihi sisa jatah pembelian Anda (<?= $max_beli ?> tiket).";
+    } else if (qty > maxBeli) {
+        errObj.innerText = `Melebihi sisa jatah pembelian Anda (${maxBeli} tiket).`;
+        errObj.classList.remove('d-none');
+        btn.disabled = true;
+    } else if (maxBeli <= 0) {
+        errObj.innerText = `Anda telah mencapai batas maksimal pembelian tiket ini (${maxPembelian} tiket).`;
         errObj.classList.remove('d-none');
         btn.disabled = true;
     } else {
