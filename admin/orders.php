@@ -109,7 +109,7 @@ if(isset($_POST['cancel'])) {
 }
 
 // 2. Pagination
-$per_page = 10;
+$per_page = isset($_GET['per_page']) ? (int)$_GET['per_page'] : 10;
 $page = isset($_GET['page']) ? (int)$_GET['page'] : 1;
 if($page < 1) $page = 1;
 $offset = ($page - 1) * $per_page;
@@ -155,6 +155,16 @@ $events = $conn->query("SELECT id_event, nama_event FROM event ORDER BY tanggal_
     <div class="col-12 mb-3 d-print-none">
         <div class="card p-3 shadow-lg">
             <form action="" method="GET" class="row gx-2 gy-2 align-items-center">
+                <div class="col-md-2">
+                    <label class="form-label text-white-50 mb-1"><small>Per Halaman</small></label>
+                    <select name="per_page" class="form-select form-select-sm border-secondary bg-dark text-white" onchange="this.form.submit()">
+                        <option value="5" <?= $per_page == 5 ? 'selected' : '' ?>>5</option>
+                        <option value="10" <?= $per_page == 10 ? 'selected' : '' ?>>10</option>
+                        <option value="25" <?= $per_page == 25 ? 'selected' : '' ?>>25</option>
+                        <option value="50" <?= $per_page == 50 ? 'selected' : '' ?>>50</option>
+                        <option value="100" <?= $per_page == 100 ? 'selected' : '' ?>>100</option>
+                    </select>
+                </div>
                 <div class="col-md-3">
                     <label class="form-label text-white-50 mb-1"><small>Cari (ID/Nama/Email)</small></label>
                     <input type="text" name="search" class="form-control form-control-sm border-secondary bg-transparent text-white" value="<?= htmlspecialchars($search) ?>" placeholder="Kata kunci...">
@@ -168,7 +178,7 @@ $events = $conn->query("SELECT id_event, nama_event FROM event ORDER BY tanggal_
                         <?php endwhile; ?>
                     </select>
                 </div>
-                <div class="col-md-3">
+                <div class="col-md-2">
                     <label class="form-label text-white-50 mb-1"><small>Filter Status</small></label>
                     <select name="status" class="form-select form-select-sm border-secondary bg-dark text-white">
                         <option value="">-- Semua Status --</option>
@@ -177,7 +187,7 @@ $events = $conn->query("SELECT id_event, nama_event FROM event ORDER BY tanggal_
                         <option value="cancelled" <?= $filter_status == 'cancelled' ? 'selected' : '' ?>>Cancelled (Batal)</option>
                     </select>
                 </div>
-                <div class="col-md-3 d-flex align-items-end gap-2 mt-4 mt-md-0">
+                <div class="col-md-2 d-flex align-items-end gap-2 mt-4 mt-md-0">
                     <button type="submit" class="btn btn-sm btn-primary flex-grow-1"><i class="bi bi-filter"></i> Filter</button>
                     <a href="orders.php" class="btn btn-sm btn-outline-secondary" title="Reset"><i class="bi bi-arrow-clockwise"></i></a>
                 </div>
@@ -350,17 +360,17 @@ $events = $conn->query("SELECT id_event, nama_event FROM event ORDER BY tanggal_
                         <ul class="pagination pagination-sm justify-content-center mb-0" data-bs-theme="dark">
                             <!-- Prev -->
                             <li class="page-item <?= ($page <= 1) ? 'disabled' : '' ?>">
-                                <a class="page-link bg-dark text-white border-secondary" href="?page=<?= $page - 1 ?>&search=<?=urlencode($search)?>&status=<?=urlencode($filter_status)?>&event=<?=urlencode($filter_event)?>">&laquo;</a>
+                                <a class="page-link bg-dark text-white border-secondary" href="?page=<?= $page - 1 ?>&search=<?=urlencode($search)?>&status=<?=urlencode($filter_status)?>&event=<?=urlencode($filter_event)?>&per_page=<?= $per_page ?>">&laquo;</a>
                             </li>
                             <!-- Num -->
                             <?php for($i=1; $i<=$total_pages; $i++): ?>
                                 <li class="page-item <?= ($page == $i) ? 'active' : '' ?>">
-                                    <a class="page-link <?= ($page == $i) ? 'bg-primary border-primary text-white' : 'bg-dark text-white border-secondary' ?>" href="?page=<?= $i ?>&search=<?=urlencode($search)?>&status=<?=urlencode($filter_status)?>&event=<?=urlencode($filter_event)?>"><?= $i ?></a>
+                                    <a class="page-link <?= ($page == $i) ? 'bg-primary border-primary text-white' : 'bg-dark text-white border-secondary' ?>" href="?page=<?= $i ?>&search=<?=urlencode($search)?>&status=<?=urlencode($filter_status)?>&event=<?=urlencode($filter_event)?>&per_page=<?= $per_page ?>"><?= $i ?></a>
                                 </li>
                             <?php endfor; ?>
                             <!-- Next -->
                             <li class="page-item <?= ($page >= $total_pages) ? 'disabled' : '' ?>">
-                                <a class="page-link bg-dark text-white border-secondary" href="?page=<?= $page + 1 ?>&search=<?=urlencode($search)?>&status=<?=urlencode($filter_status)?>&event=<?=urlencode($filter_event)?>">&raquo;</a>
+                                <a class="page-link bg-dark text-white border-secondary" href="?page=<?= $page + 1 ?>&search=<?=urlencode($search)?>&status=<?=urlencode($filter_status)?>&event=<?=urlencode($filter_event)?>&per_page=<?= $per_page ?>">&raquo;</a>
                             </li>
                         </ul>
                     </nav>

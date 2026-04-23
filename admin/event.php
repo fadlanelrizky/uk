@@ -96,7 +96,7 @@ if($search) {
     $where_sql .= " AND (e.nama_event LIKE '%$search%' OR v.nama_venue LIKE '%$search%')";
 }
 
-$per_page = 5;
+$per_page = isset($_GET['per_page']) ? (int)$_GET['per_page'] : 5;
 $page = isset($_GET['page']) ? (int)$_GET['page'] : 1;
 if($page < 1) $page = 1;
 $offset = ($page - 1) * $per_page;
@@ -168,6 +168,13 @@ $venues = $conn->query("SELECT * FROM venue ORDER BY nama_venue ASC");
             <div class="card-header bg-dark text-white d-flex justify-content-between align-items-center">
                 <span>Daftar Event</span>
                 <form action="" method="GET" class="d-flex gap-2 mb-0">
+                    <select name="per_page" class="form-select form-select-sm border-secondary bg-dark text-white" style="width: auto;" onchange="this.form.submit()">
+                        <option value="5" <?= $per_page == 5 ? 'selected' : '' ?>>5</option>
+                        <option value="10" <?= $per_page == 10 ? 'selected' : '' ?>>10</option>
+                        <option value="25" <?= $per_page == 25 ? 'selected' : '' ?>>25</option>
+                        <option value="50" <?= $per_page == 50 ? 'selected' : '' ?>>50</option>
+                        <option value="100" <?= $per_page == 100 ? 'selected' : '' ?>>100</option>
+                    </select>
                     <input type="text" name="search" class="form-control form-control-sm border-secondary bg-transparent text-white" placeholder="Cari event..." value="<?= htmlspecialchars($search) ?>">
                     <button type="submit" class="btn btn-sm btn-primary"><i class="bi bi-search"></i></button>
                     <?php if($search): ?>
@@ -225,15 +232,15 @@ $venues = $conn->query("SELECT * FROM venue ORDER BY nama_venue ASC");
                     <nav class="mt-3">
                         <ul class="pagination pagination-sm justify-content-center mb-0" data-bs-theme="dark">
                             <li class="page-item <?= ($page <= 1) ? 'disabled' : '' ?>">
-                                <a class="page-link bg-dark text-white border-secondary" href="?page=<?= $page - 1 ?>&search=<?= urlencode($search) ?>">&laquo;</a>
+                                <a class="page-link bg-dark text-white border-secondary" href="?page=<?= $page - 1 ?>&search=<?= urlencode($search) ?>&per_page=<?= $per_page ?>">&laquo;</a>
                             </li>
                             <?php for($i=1; $i<=$total_pages; $i++): ?>
                                 <li class="page-item <?= ($page == $i) ? 'active' : '' ?>">
-                                    <a class="page-link <?= ($page == $i) ? 'bg-primary border-primary text-white' : 'bg-dark text-white border-secondary' ?>" href="?page=<?= $i ?>&search=<?= urlencode($search) ?>"><?= $i ?></a>
+                                    <a class="page-link <?= ($page == $i) ? 'bg-primary border-primary text-white' : 'bg-dark text-white border-secondary' ?>" href="?page=<?= $i ?>&search=<?= urlencode($search) ?>&per_page=<?= $per_page ?>"><?= $i ?></a>
                                 </li>
                             <?php endfor; ?>
                             <li class="page-item <?= ($page >= $total_pages) ? 'disabled' : '' ?>">
-                                <a class="page-link bg-dark text-white border-secondary" href="?page=<?= $page + 1 ?>&search=<?= urlencode($search) ?>">&raquo;</a>
+                                <a class="page-link bg-dark text-white border-secondary" href="?page=<?= $page + 1 ?>&search=<?= urlencode($search) ?>&per_page=<?= $per_page ?>">&raquo;</a>
                             </li>
                         </ul>
                     </nav>
