@@ -131,32 +131,49 @@ $events = $conn->query("SELECT e.id_event, e.nama_event, v.kapasitas, COALESCE((
     </div>
     
     <div class="col-md-8">
-        <div class="card">
-            <div class="card-header bg-dark text-white d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-2">
-                <span>Daftar Tiket</span>
-                <form action="" method="GET" class="d-flex gap-2 mb-0 flex-wrap">
-                    <select name="per_page" class="form-select form-select-sm border-secondary bg-dark text-white" style="width: auto;" onchange="this.form.submit()">
-                        <option value="5" <?= $per_page == 5 ? 'selected' : '' ?>>5</option>
-                        <option value="10" <?= $per_page == 10 ? 'selected' : '' ?>>10</option>
-                        <option value="25" <?= $per_page == 25 ? 'selected' : '' ?>>25</option>
-                        <option value="50" <?= $per_page == 50 ? 'selected' : '' ?>>50</option>
-                        <option value="100" <?= $per_page == 100 ? 'selected' : '' ?>>100</option>
-                    </select>
-                    <select name="filter_event" class="form-select form-select-sm border-secondary bg-dark text-white" style="max-width:200px;">
-                        <option value="">Semua Event</option>
-                        <?php 
-                        $filter_events = $conn->query("SELECT id_event, nama_event FROM event ORDER BY id_event DESC");
-                        while($fe = $filter_events->fetch_assoc()): 
-                        ?>
-                            <option value="<?= $fe['id_event'] ?>" <?= $filter_event == $fe['id_event'] ? 'selected' : '' ?>><?= htmlspecialchars($fe['nama_event']) ?></option>
-                        <?php endwhile; ?>
-                    </select>
-                    <input type="text" name="search" class="form-control form-control-sm border-secondary bg-transparent text-white" style="max-width:150px;" placeholder="Cari tiket..." value="<?= htmlspecialchars($search) ?>">
-                    <button type="submit" class="btn btn-sm btn-primary"><i class="bi bi-search"></i></button>
-                    <?php if($search || $filter_event): ?>
-                        <a href="tiket.php" class="btn btn-sm btn-outline-secondary"><i class="bi bi-arrow-clockwise"></i></a>
-                    <?php endif; ?>
+        <!-- Filter Toolbar -->
+        <div class="card shadow-sm border-secondary mb-4 d-print-none" style="background: rgba(15,23,42,0.4); border-radius: 12px;">
+            <div class="card-body p-3">
+                <form action="" method="GET" class="row g-2 align-items-center">
+                    <div class="col-md-5">
+                        <div class="input-group input-group-sm">
+                            <span class="input-group-text bg-dark border-secondary text-white-50"><i class="bi bi-search"></i></span>
+                            <input type="text" name="search" class="form-control border-secondary bg-dark text-white" placeholder="Cari tiket atau event..." value="<?= htmlspecialchars($search) ?>">
+                            <button class="btn btn-primary px-3" type="submit" style="z-index: 0;">Cari</button>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <select name="filter_event" class="form-select form-select-sm border-secondary bg-dark text-white" onchange="this.form.submit()">
+                            <option value="">Semua Event</option>
+                            <?php 
+                            $filter_events = $conn->query("SELECT id_event, nama_event FROM event ORDER BY id_event DESC");
+                            while($fe = $filter_events->fetch_assoc()): 
+                            ?>
+                                <option value="<?= $fe['id_event'] ?>" <?= $filter_event == $fe['id_event'] ? 'selected' : '' ?>><?= htmlspecialchars($fe['nama_event']) ?></option>
+                            <?php endwhile; ?>
+                        </select>
+                    </div>
+                    <div class="col-md-3 d-flex justify-content-end gap-2">
+                        <select name="per_page" class="form-select form-select-sm border-secondary bg-dark text-white" style="width: 70px;" onchange="this.form.submit()">
+                            <option value="5" <?= $per_page == 5 ? 'selected' : '' ?>>5</option>
+                            <option value="10" <?= $per_page == 10 ? 'selected' : '' ?>>10</option>
+                            <option value="25" <?= $per_page == 25 ? 'selected' : '' ?>>25</option>
+                            <option value="50" <?= $per_page == 50 ? 'selected' : '' ?>>50</option>
+                            <option value="100" <?= $per_page == 100 ? 'selected' : '' ?>>100</option>
+                        </select>
+                        <!-- Hidden submit button to allow Enter key submission on input -->
+                        <button type="submit" class="d-none">Submit</button>
+                        <?php if($search || $filter_event): ?>
+                            <a href="tiket.php" class="btn btn-sm btn-outline-danger" title="Hapus Filter"><i class="bi bi-x-lg"></i></a>
+                        <?php endif; ?>
+                    </div>
                 </form>
+            </div>
+        </div>
+
+        <div class="card shadow-lg" style="border-radius: 12px; overflow: hidden;">
+            <div class="card-header bg-dark text-white border-bottom border-secondary p-3">
+                <span class="fs-6 fw-semibold"><i class="bi bi-ticket-detailed me-2 text-info"></i>Daftar Tiket</span>
             </div>
             <div class="card-body">
                 <div class="table-responsive">

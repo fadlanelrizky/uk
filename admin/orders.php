@@ -152,100 +152,106 @@ $events = $conn->query("SELECT id_event, nama_event FROM event ORDER BY tanggal_
         <?php endif; ?>
     </div>
 
-    <div class="col-12 mb-3 d-print-none">
-        <div class="card p-3 shadow-lg">
-            <form action="" method="GET" class="row gx-2 gy-2 align-items-center">
-                <div class="col-md-2">
-                    <label class="form-label text-white-50 mb-1"><small>Per Halaman</small></label>
-                    <select name="per_page" class="form-select form-select-sm border-secondary bg-dark text-white" onchange="this.form.submit()">
-                        <option value="5" <?= $per_page == 5 ? 'selected' : '' ?>>5</option>
-                        <option value="10" <?= $per_page == 10 ? 'selected' : '' ?>>10</option>
-                        <option value="25" <?= $per_page == 25 ? 'selected' : '' ?>>25</option>
-                        <option value="50" <?= $per_page == 50 ? 'selected' : '' ?>>50</option>
-                        <option value="100" <?= $per_page == 100 ? 'selected' : '' ?>>100</option>
-                    </select>
-                </div>
-                <div class="col-md-3">
-                    <label class="form-label text-white-50 mb-1"><small>Cari (ID/Nama/Email)</small></label>
-                    <input type="text" name="search" class="form-control form-control-sm border-secondary bg-transparent text-white" value="<?= htmlspecialchars($search) ?>" placeholder="Kata kunci...">
-                </div>
-                <div class="col-md-3">
-                    <label class="form-label text-white-50 mb-1"><small>Filter Event</small></label>
-                    <select name="event" class="form-select form-select-sm border-secondary bg-dark text-white">
-                        <option value="">-- Semua Event --</option>
-                        <?php while($ev = $events->fetch_assoc()): ?>
-                            <option value="<?= $ev['id_event'] ?>" <?= $filter_event == $ev['id_event'] ? 'selected' : '' ?>><?= htmlspecialchars($ev['nama_event']) ?></option>
-                        <?php endwhile; ?>
-                    </select>
-                </div>
-                <div class="col-md-2">
-                    <label class="form-label text-white-50 mb-1"><small>Filter Status</small></label>
-                    <select name="status" class="form-select form-select-sm border-secondary bg-dark text-white">
-                        <option value="">-- Semua Status --</option>
-                        <option value="paid" <?= $filter_status == 'paid' ? 'selected' : '' ?>>Paid (Berhasil)</option>
-                        <option value="pending" <?= $filter_status == 'pending' ? 'selected' : '' ?>>Pending (Menunggu)</option>
-                        <option value="cancelled" <?= $filter_status == 'cancelled' ? 'selected' : '' ?>>Cancelled (Batal)</option>
-                    </select>
-                </div>
-                <div class="col-md-2 d-flex align-items-end gap-2 mt-4 mt-md-0">
-                    <button type="submit" class="btn btn-sm btn-primary flex-grow-1"><i class="bi bi-filter"></i> Filter</button>
-                    <a href="orders.php" class="btn btn-sm btn-outline-secondary" title="Reset"><i class="bi bi-arrow-clockwise"></i></a>
-                </div>
-            </form>
-            
-            <?php if($filter_event): ?>
-                <?php
-                    $q_terjual = $conn->query("
-                        SELECT COUNT(a.id_attendee) as terjual 
-                        FROM attendee a 
-                        JOIN order_detail od ON a.id_order_detail = od.id_detail 
-                        JOIN tiket t ON od.id_tiket = t.id_tiket 
-                        JOIN orders o ON od.id_order = o.id_order 
-                        WHERE t.id_event = $filter_event AND o.status = 'paid'
-                    ")->fetch_assoc()['terjual'];
-                    $q_sisa = $conn->query("SELECT SUM(kuota) as sisa FROM tiket WHERE id_event = $filter_event")->fetch_assoc()['sisa'];
-                    $q_kategori = $conn->query("SELECT nama_tiket, kuota FROM tiket WHERE id_event = $filter_event ORDER BY harga ASC");
-                    $q_pendapatan = $conn->query("
-                        SELECT SUM(o.total) as pendapatan
-                        FROM orders o
-                        JOIN order_detail od ON o.id_order = od.id_order
-                        JOIN tiket t ON od.id_tiket = t.id_tiket
-                        WHERE t.id_event = $filter_event AND o.status = 'paid'
-                    ")->fetch_assoc()['pendapatan'];
-                ?>
-                <div class="alert alert-success mt-3 mb-0 py-2 border-success bg-success bg-opacity-10 text-success">
-                    <div class="d-flex justify-content-between align-items-center">
-                        <div>
-                            <i class="bi bi-info-circle-fill me-2"></i> 
-                            <strong>Info Tiket Event:</strong> Terjual <span class="badge bg-success mx-1"><?= (int)$q_terjual ?></span> 
-                            | Total Sisa <span class="badge bg-info mx-1 text-dark"><?= (int)$q_sisa ?></span>
-                            | Pendapatan <span class="badge bg-success mx-1">Rp <?= number_format((float)$q_pendapatan, 0, ',', '.') ?></span>
+    <!-- Filter Toolbar -->
+    <div class="col-12 mb-4 d-print-none">
+        <div class="card shadow-sm border-secondary" style="background: rgba(15,23,42,0.4); border-radius: 12px;">
+            <div class="card-body p-3">
+                <form action="" method="GET" class="row g-3 align-items-center">
+                    <div class="col-md-4">
+                        <div class="input-group">
+                            <span class="input-group-text bg-dark border-secondary text-white-50"><i class="bi bi-search"></i></span>
+                            <input type="text" name="search" class="form-control border-secondary bg-dark text-white" placeholder="Cari ID, Nama, Email..." value="<?= htmlspecialchars($search) ?>">
+                            <button class="btn btn-primary px-3" type="submit" style="z-index: 0;">Cari</button>
                         </div>
                     </div>
-                    <?php if($q_kategori->num_rows > 0): ?>
-                        <div class="mt-2 pt-2 border-top border-success border-opacity-25">
-                            <small class="fw-semibold me-2">Sisa Per Kategori:</small>
-                            <?php while($kat = $q_kategori->fetch_assoc()): ?>
-                                <span class="badge bg-dark border border-success border-opacity-50 text-white me-1 mb-1 fw-normal"><?= htmlspecialchars($kat['nama_tiket']) ?>: <strong class="text-info"><?= $kat['kuota'] ?></strong></span>
+                    <div class="col-md-3">
+                        <select name="event" class="form-select border-secondary bg-dark text-white" onchange="this.form.submit()">
+                            <option value="">Semua Event</option>
+                            <?php 
+                            $events->data_seek(0);
+                            while($ev = $events->fetch_assoc()): 
+                            ?>
+                                <option value="<?= $ev['id_event'] ?>" <?= $filter_event == $ev['id_event'] ? 'selected' : '' ?>><?= htmlspecialchars($ev['nama_event']) ?></option>
                             <?php endwhile; ?>
-                        </div>
-                    <?php endif; ?>
-                </div>
-            <?php endif; ?>
-            
-            <hr class="border-secondary mb-2 mt-3">
-            <div class="text-end">
-                <a href="?export=csv&search=<?=urlencode($search)?>&status=<?=urlencode($filter_status)?>&event=<?=urlencode($filter_event)?>" class="btn btn-sm btn-success"><i class="bi bi-file-earmark-excel"></i> Export Excel (CSV)</a>
-                <button onclick="window.print()" class="btn btn-sm btn-danger"><i class="bi bi-file-pdf"></i> Cetak Laporan (PDF)</button>
+                        </select>
+                    </div>
+                    <div class="col-md-2">
+                        <select name="status" class="form-select border-secondary bg-dark text-white" onchange="this.form.submit()">
+                            <option value="">Semua Status</option>
+                            <option value="paid" <?= $filter_status == 'paid' ? 'selected' : '' ?>>Paid (Berhasil)</option>
+                            <option value="pending" <?= $filter_status == 'pending' ? 'selected' : '' ?>>Pending (Menunggu)</option>
+                            <option value="cancelled" <?= $filter_status == 'cancelled' ? 'selected' : '' ?>>Cancelled (Batal)</option>
+                        </select>
+                    </div>
+                    <div class="col-md-3 d-flex justify-content-md-end gap-2">
+                        <select name="per_page" class="form-select border-secondary bg-dark text-white" style="width: 80px;" onchange="this.form.submit()">
+                            <option value="5" <?= $per_page == 5 ? 'selected' : '' ?>>5</option>
+                            <option value="10" <?= $per_page == 10 ? 'selected' : '' ?>>10</option>
+                            <option value="25" <?= $per_page == 25 ? 'selected' : '' ?>>25</option>
+                            <option value="50" <?= $per_page == 50 ? 'selected' : '' ?>>50</option>
+                            <option value="100" <?= $per_page == 100 ? 'selected' : '' ?>>100</option>
+                        </select>
+                        <?php if($search || $filter_status || $filter_event): ?>
+                            <a href="orders.php" class="btn btn-outline-danger" title="Hapus Filter"><i class="bi bi-x-lg"></i></a>
+                        <?php endif; ?>
+                    </div>
+                </form>
             </div>
         </div>
     </div>
 
     <div class="col-12">
-        <div class="card shadow-lg">
-            <div class="card-header bg-dark text-white d-flex justify-content-between align-items-center border-bottom border-secondary">
-                <span>Daftar Transaksi</span>
+        <div class="card shadow-lg" style="border-radius: 12px; overflow: hidden;">
+            <div class="card-header bg-dark text-white d-flex justify-content-between align-items-center border-bottom border-secondary p-3">
+                <span class="fs-5 fw-semibold"><i class="bi bi-receipt me-2 text-primary"></i>Daftar Transaksi</span>
+                <div class="d-print-none text-end">
+                    <a href="?export=csv&search=<?=urlencode($search)?>&status=<?=urlencode($filter_status)?>&event=<?=urlencode($filter_event)?>" class="btn btn-sm btn-success me-1 text-nowrap"><i class="bi bi-file-earmark-excel me-1"></i>Export CSV</a>
+                    <button onclick="window.print()" class="btn btn-sm btn-danger text-nowrap"><i class="bi bi-file-pdf me-1"></i>Cetak PDF</button>
+                </div>
             </div>
+            
+            <?php if($filter_event): ?>
+                <div class="card-body border-bottom border-secondary bg-dark bg-opacity-25 d-print-none p-3">
+                    <?php
+                        $q_terjual = $conn->query("
+                            SELECT COUNT(a.id_attendee) as terjual 
+                            FROM attendee a 
+                            JOIN order_detail od ON a.id_order_detail = od.id_detail 
+                            JOIN tiket t ON od.id_tiket = t.id_tiket 
+                            JOIN orders o ON od.id_order = o.id_order 
+                            WHERE t.id_event = $filter_event AND o.status = 'paid'
+                        ")->fetch_assoc()['terjual'];
+                        $q_sisa = $conn->query("SELECT SUM(kuota) as sisa FROM tiket WHERE id_event = $filter_event")->fetch_assoc()['sisa'];
+                        $q_kategori = $conn->query("SELECT nama_tiket, kuota FROM tiket WHERE id_event = $filter_event ORDER BY harga ASC");
+                        $q_pendapatan = $conn->query("
+                            SELECT SUM(o.total) as pendapatan
+                            FROM orders o
+                            JOIN order_detail od ON o.id_order = od.id_order
+                            JOIN tiket t ON od.id_tiket = t.id_tiket
+                            WHERE t.id_event = $filter_event AND o.status = 'paid'
+                        ")->fetch_assoc()['pendapatan'];
+                    ?>
+                    <div class="alert alert-success m-0 py-2 border-success bg-success bg-opacity-10 text-success shadow-sm">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <div>
+                                <i class="bi bi-info-circle-fill me-2"></i> 
+                                <strong>Info Tiket Event:</strong> Terjual <span class="badge bg-success mx-1"><?= (int)$q_terjual ?></span> 
+                                | Total Sisa <span class="badge bg-info mx-1 text-dark"><?= (int)$q_sisa ?></span>
+                                | Pendapatan <span class="badge bg-success mx-1">Rp <?= number_format((float)$q_pendapatan, 0, ',', '.') ?></span>
+                            </div>
+                        </div>
+                        <?php if($q_kategori->num_rows > 0): ?>
+                            <div class="mt-2 pt-2 border-top border-success border-opacity-25">
+                                <small class="fw-semibold me-2">Sisa Per Kategori:</small>
+                                <?php while($kat = $q_kategori->fetch_assoc()): ?>
+                                    <span class="badge bg-dark border border-success border-opacity-50 text-white me-1 mb-1 fw-normal"><?= htmlspecialchars($kat['nama_tiket']) ?>: <strong class="text-info"><?= $kat['kuota'] ?></strong></span>
+                                <?php endwhile; ?>
+                            </div>
+                        <?php endif; ?>
+                    </div>
+                </div>
+            <?php endif; ?>
+
             <div class="card-body p-0">
                 <div class="table-responsive">
                     <table class="table table-hover table-bordered text-white m-0 border-secondary">

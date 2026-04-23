@@ -10,11 +10,14 @@ $total_income = $conn->query("SELECT SUM(total) as t FROM orders WHERE status='p
 $total_terjual = $conn->query("SELECT SUM(qty) as t FROM order_detail od JOIN orders o ON od.id_order=o.id_order WHERE o.status='paid'")->fetch_assoc()['t'];
 
 $chart_data = ['labels' => [], 'revenue' => []];
+$total_7_days = 0;
 for($i=6; $i>=0; $i--) {
     $date = date('Y-m-d', strtotime("-$i days"));
     $chart_data['labels'][] = date('d M', strtotime($date));
     $rev = $conn->query("SELECT SUM(total) as t FROM orders WHERE status='paid' AND DATE(tanggal_order) = '$date'")->fetch_assoc()['t'];
-    $chart_data['revenue'][] = $rev ? (int)$rev : 0;
+    $val = $rev ? (int)$rev : 0;
+    $chart_data['revenue'][] = $val;
+    $total_7_days += $val;
 }
 
 // Data Tambahan untuk Dashboard
@@ -71,7 +74,10 @@ $bestselling_events = $conn->query("
     <div class="col-lg-8">
         <div class="card shadow-lg border-secondary h-100" style="border-radius:12px; overflow:hidden;">
             <div class="card-header bg-dark text-white border-bottom border-secondary d-flex justify-content-between align-items-center">
-                <h5 class="mb-0 fs-6"><i class="bi bi-graph-up-arrow me-2 text-info"></i>Grafik Pendapatan (7 Hari Terakhir)</h5>
+                <h5 class="mb-0 fs-6"><i class="bi bi-bar-chart-fill me-2 text-info"></i>Grafik Pendapatan (7 Hari)</h5>
+                <span class="badge bg-success bg-opacity-25 text-success border border-success fw-normal px-2 py-1">
+                    <i class="bi bi-wallet2 me-1"></i>Total: Rp <?= number_format($total_7_days, 0, ',', '.') ?>
+                </span>
             </div>
             <div class="card-body p-3 p-md-4" style="background: rgba(15,23,42,0.6);">
                 <canvas id="revenueChart" style="max-height: 300px; width: 100%;"></canvas>
@@ -164,46 +170,51 @@ $bestselling_events = $conn->query("
 document.addEventListener("DOMContentLoaded", function() {
     const ctx = document.getElementById('revenueChart').getContext('2d');
     
-    // Gradient for the line chart
-    let gradient = ctx.createLinearGradient(0, 0, 0, 350);
-    gradient.addColorStop(0, 'rgba(129, 140, 248, 0.6)'); // Accent color matching --accent-1
-    gradient.addColorStop(1, 'rgba(129, 140, 248, 0)');
+    // Create modern gradient for bars
+    let gradient = ctx.createLinearGradient(0, 0, 0, 300);
+    gradient.addColorStop(0, 'rgba(56, 189, 248, 1)');   // Light blue top
+    gradient.addColorStop(1, 'rgba(59, 130, 246, 0.2)'); // Darker blue transparent bottom
+
+    let hoverGradient = ctx.createLinearGradient(0, 0, 0, 300);
+    hoverGradient.addColorStop(0, 'rgba(14, 165, 233, 1)'); 
+    hoverGradient.addColorStop(1, 'rgba(37, 99, 235, 0.4)');
 
     new Chart(ctx, {
-        type: 'line',
+        type: 'bar',
         data: {
             labels: <?= json_encode($chart_data['labels']) ?>,
             datasets: [{
                 label: 'Pendapatan',
                 data: <?= json_encode($chart_data['revenue']) ?>,
-                borderColor: '#818cf8',
                 backgroundColor: gradient,
-                borderWidth: 3,
-                pointBackgroundColor: '#c084fc',
-                pointBorderColor: '#1e293b',
-                pointBorderWidth: 2,
-                pointHoverBackgroundColor: '#fff',
-                pointHoverBorderColor: '#c084fc',
-                pointRadius: 4,
-                pointHoverRadius: 6,
-                fill: true,
-                tension: 0.4
+                hoverBackgroundColor: hoverGradient,
+                borderRadius: 6,
+                borderSkipped: false,
+                barPercentage: 0.5,
+                categoryPercentage: 0.7
             }]
         },
         options: {
             responsive: true,
             maintainAspectRatio: false,
+            interaction: {
+                mode: 'index',
+                intersect: false,
+            },
             plugins: {
                 legend: {
                     display: false
                 },
                 tooltip: {
-                    backgroundColor: 'rgba(15, 23, 42, 0.9)',
-                    titleColor: '#fff',
-                    bodyColor: '#e2e8f0',
-                    borderColor: 'rgba(255,255,255,0.1)',
+                    backgroundColor: 'rgba(30, 41, 59, 0.95)',
+                    titleColor: '#94a3b8',
+                    titleFont: { size: 13, family: "'Plus Jakarta Sans', sans-serif", weight: '500' },
+                    bodyColor: '#10b981', // Emerald color for revenue
+                    bodyFont: { size: 15, family: "'Plus Jakarta Sans', sans-serif", weight: 'bold' },
+                    borderColor: 'rgba(255, 255, 255, 0.1)',
                     borderWidth: 1,
-                    padding: 10,
+                    padding: 12,
+                    displayColors: false,
                     callbacks: {
                         label: function(context) {
                             let value = context.raw;
@@ -217,12 +228,15 @@ document.addEventListener("DOMContentLoaded", function() {
                     beginAtZero: true,
                     grid: {
                         color: 'rgba(255, 255, 255, 0.05)',
-                        drawBorder: false
+                        borderDash: [5, 5],
+                        drawBorder: false,
+                        tickLength: 0
                     },
                     ticks: {
                         color: '#94a3b8',
                         font: { family: "'Plus Jakarta Sans', sans-serif", size: 11 },
-                        callback: function(value, index, values) {
+                        padding: 10,
+                        callback: function(value) {
                             if(value >= 1000000) {
                                 return 'Rp ' + (value / 1000000) + ' Jt';
                             } else if(value >= 1000) {
@@ -239,7 +253,8 @@ document.addEventListener("DOMContentLoaded", function() {
                     },
                     ticks: {
                         color: '#94a3b8',
-                        font: { family: "'Plus Jakarta Sans', sans-serif", size: 11 }
+                        font: { family: "'Plus Jakarta Sans', sans-serif", size: 12 },
+                        padding: 5
                     }
                 }
             }

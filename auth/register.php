@@ -211,7 +211,7 @@ if($_SERVER['REQUEST_METHOD'] == 'POST') {
             </button>
         </div>
 
-        <button class="btn btn-custom w-100 py-2 mb-3" type="submit">Daftar Sekarang <i class="bi bi-person-plus ms-1"></i></button>
+        <button class="btn btn-custom w-100 py-2 mb-3" type="submit">Register   <i class="bi bi-person-plus ms-1"></i></button>
 
         <div class="text-center mt-3">
             <span class="text-muted small">Sudah punya akun? <a href="login.php" class="text-decoration-none fw-semibold" style="color: #818cf8;">Login Sekarang</a></span>

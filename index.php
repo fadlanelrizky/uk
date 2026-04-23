@@ -317,7 +317,7 @@ elseif($role == 'petugas') $dashboardLink = 'petugas/index.php';
                         <a href="auth/logout.php" class="btn btn-outline-custom border-danger text-danger hover-bg-danger">Logout</a>
                     <?php else: ?>
                         <a href="auth/login.php" class="btn btn-outline-custom">Log In</a>
-                        <a href="auth/register.php" class="btn btn-custom">Daftar Sekarang</a>
+                        <a href="auth/register.php" class="btn btn-custom">Daftar</a>
                     <?php endif; ?>
                 </div>
             </div>
@@ -332,7 +332,7 @@ elseif($role == 'petugas') $dashboardLink = 'petugas/index.php';
                     <span class="badge bg-white bg-opacity-10 text-white border border-white border-opacity-25 px-4 py-2 rounded-pill mb-4 fw-medium" style="backdrop-filter: blur(10px); letter-spacing: 0.5px;">
                         Tingkatkan Pengalaman Konsermu 🔥
                     </span>
-                    <h1 class="display-3 fw-bold mb-4 text-white" style="letter-spacing: -1px; text-shadow: 0 4px 20px rgba(0,0,0,0.5);">Temukan Tiket Konser <br>Favoritmu Dengan Mudah</h1>
+                    <h1 class="display-3 fw-bold mb-4 text-white" style="letter-spacing: -1px; text-shadow: 0 4px 20px rgba(0,0,0,0.5);">Temukan Tiket Konser <br>Favoritmu Sekarang</h1>
                     <p class="lead text-light mb-5 px-lg-5" style="opacity: 0.9; font-size: 1.2rem; text-shadow: 0 2px 10px rgba(0,0,0,0.5);">Platform pembelian tiket konser musik dan festival paling eksklusif. Dapatkan akses cepat ke event artis favoritmu tanpa antrean panjang.</p>
                     <div class="d-flex flex-wrap gap-3 justify-content-center">
                         <a href="#event" class="btn btn-custom btn-lg px-5 shadow-lg">Jelajahi Event</a>
