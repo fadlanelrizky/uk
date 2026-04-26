@@ -335,7 +335,7 @@ $cur_page = basename($_SERVER['PHP_SELF']);
                         <i class="bi bi-tags"></i> <span class="nav-text">Voucher</span>
                     </a>
                     <a href="orders.php" class="nav-link <?= $cur_page=='orders.php'?'active':'' ?>">
-                        <i class="bi bi-cart-check"></i> <span class="nav-text">Orders</span>
+                        <i class="bi bi-cart-check"></i> <span class="nav-text">Laporan</span>
                     </a>
                 <?php elseif ($role === 'petugas'): ?>
                     <a href="index.php" class="nav-link <?= $cur_page=='index.php'?'active':'' ?>">
