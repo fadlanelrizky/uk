@@ -129,11 +129,9 @@ document.addEventListener('DOMContentLoaded', () => {
             html5QrcodeScanner = new Html5QrcodeScanner("reader", { 
                 fps: 30, // Frame check lebih cepat
                 qrbox: function(viewfinderWidth, viewfinderHeight) {
-                    // Lebar hampir penuh sangat penting untuk memuat panjang Barcode 1D
-                    return {
-                        width: viewfinderWidth * 0.95,
-                        height: viewfinderHeight * 0.8
-                    };
+                    var minEdge = Math.min(viewfinderWidth, viewfinderHeight);
+                    var size = Math.floor(minEdge * 0.8);
+                    return { width: size, height: size };
                 },
                 // Resolusi tinggi HD (1280x720) krusial agar garis-garis Barcode 1D terlihat tajam
                 videoConstraints: {
