@@ -120,7 +120,7 @@ $events = $conn->query("SELECT e.id_event, e.nama_event, v.kapasitas, COALESCE((
                     </div>
                     <div class="mb-3">
                         <label class="text-white-50">Maks. Pembelian/Akun</label>
-                        <input type="number" class="form-control" name="max_pembelian" id="max_pembelian" value="5" min="1" required>
+                        <input type="number" class="form-control" name="max_pembelian" id="max_pembelian" value="" min="1" required>
                     </div>
                     
                     <button type="submit" class="btn btn-primary w-100" id="btn-submit">Simpan Tiket</button>
