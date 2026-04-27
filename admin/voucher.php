@@ -96,7 +96,6 @@ $vouchers = $conn->query("SELECT * FROM voucher WHERE $where_sql ORDER BY id_vou
                 <form action="" method="GET" class="d-flex gap-2 mb-0">
                     <select name="per_page" class="form-select form-select-sm border-secondary bg-dark text-white" style="width: auto;" onchange="this.form.submit()">
                         <option value="5" <?= $per_page == 5 ? 'selected' : '' ?>>5</option>
-                        <option value="8" <?= $per_page == 8 ? 'selected' : '' ?>>8</option>
                         <option value="10" <?= $per_page == 10 ? 'selected' : '' ?>>10</option>
                         <option value="25" <?= $per_page == 25 ? 'selected' : '' ?>>25</option>
                         <option value="50" <?= $per_page == 50 ? 'selected' : '' ?>>50</option>
