@@ -158,6 +158,10 @@ while($up = $user_purchases_res->fetch_assoc()) {
         </script>
     <?php endif; ?>
 
+    <div class="mb-3">
+        <a href="index.php" class="btn btn-outline-secondary"><i class="bi bi-arrow-left"></i> Kembali</a>
+    </div>
+
     <div class="row">
         <!-- Event Detail -->
         <div class="col-md-7 mb-4">
