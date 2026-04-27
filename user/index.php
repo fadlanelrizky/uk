@@ -108,7 +108,7 @@ $events = $conn->query("
                                     </span>
                                 </div>
                                 <a href="detail_event.php?id=<?= $e['id_event'] ?>" class="btn btn-primary btn-sm px-4">
-                                    Beli Tiket <i class="bi bi-arrow-right ms-1"></i>
+                                    Lihat Event<i class="bi bi-arrow-right ms-1"></i>
                                 </a>
                             </div>
                         </div>

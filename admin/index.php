@@ -9,16 +9,55 @@ $total_event = $conn->query("SELECT COUNT(*) as t FROM event")->fetch_assoc()['t
 $total_income = $conn->query("SELECT SUM(total) as t FROM orders WHERE status='paid'")->fetch_assoc()['t'];
 $total_terjual = $conn->query("SELECT SUM(qty) as t FROM order_detail od JOIN orders o ON od.id_order=o.id_order WHERE o.status='paid'")->fetch_assoc()['t'];
 
-$chart_data = ['labels' => [], 'revenue' => []];
-$total_7_days = 0;
-for($i=6; $i>=0; $i--) {
-    $date = date('Y-m-d', strtotime("-$i days"));
-    $chart_data['labels'][] = date('d M', strtotime($date));
-    $rev = $conn->query("SELECT SUM(total) as t FROM orders WHERE status='paid' AND DATE(tanggal_order) = '$date'")->fetch_assoc()['t'];
-    $val = $rev ? (int)$rev : 0;
-    $chart_data['revenue'][] = $val;
-    $total_7_days += $val;
+// Data Grafik: Hari Ini, Minggu Ini, Bulan Ini
+$today_date = date('Y-m-d');
+$week_start = date('Y-m-d', strtotime("-6 days"));
+$month_start = date('Y-m-01');
+
+$chart_today = ['labels' => [], 'revenue' => array_fill(0, 24, 0)];
+for($i=0; $i<24; $i++) $chart_today['labels'][] = str_pad($i, 2, '0', STR_PAD_LEFT).':00';
+$total_today = 0;
+$q_today = $conn->query("SELECT HOUR(tanggal_order) as h, SUM(total) as t FROM orders WHERE status='paid' AND DATE(tanggal_order) = '$today_date' GROUP BY HOUR(tanggal_order)");
+while($r = $q_today->fetch_assoc()) {
+    $chart_today['revenue'][(int)$r['h']] = (int)$r['t'];
+    $total_today += (int)$r['t'];
 }
+
+$chart_week = ['labels' => [], 'revenue' => []];
+$week_dates = [];
+for($i=6; $i>=0; $i--) {
+    $d = date('Y-m-d', strtotime("-$i days"));
+    $chart_week['labels'][] = date('d M', strtotime($d));
+    $chart_week['revenue'][] = 0;
+    $week_dates[$d] = 6 - $i;
+}
+$total_week = 0;
+$q_week = $conn->query("SELECT DATE(tanggal_order) as d, SUM(total) as t FROM orders WHERE status='paid' AND DATE(tanggal_order) >= '$week_start' GROUP BY DATE(tanggal_order)");
+while($r = $q_week->fetch_assoc()) {
+    if(isset($week_dates[$r['d']])) {
+        $chart_week['revenue'][$week_dates[$r['d']]] = (int)$r['t'];
+        $total_week += (int)$r['t'];
+    }
+}
+
+$days_in_month = (int)date('t');
+$chart_month = ['labels' => [], 'revenue' => array_fill(0, $days_in_month, 0)];
+for($i=1; $i<=$days_in_month; $i++) $chart_month['labels'][] = str_pad($i, 2, '0', STR_PAD_LEFT) . ' ' . date('M');
+$total_month = 0;
+$q_month = $conn->query("SELECT DAY(tanggal_order) as d, SUM(total) as t FROM orders WHERE status='paid' AND DATE(tanggal_order) >= '$month_start' GROUP BY DAY(tanggal_order)");
+while($r = $q_month->fetch_assoc()) {
+    $idx = (int)$r['d'] - 1;
+    if(isset($chart_month['revenue'][$idx])) {
+        $chart_month['revenue'][$idx] = (int)$r['t'];
+        $total_month += (int)$r['t'];
+    }
+}
+
+$chart_data_js = [
+    'today' => ['labels' => $chart_today['labels'], 'revenue' => $chart_today['revenue'], 'total' => $total_today],
+    'week' => ['labels' => $chart_week['labels'], 'revenue' => $chart_week['revenue'], 'total' => $total_week],
+    'month' => ['labels' => $chart_month['labels'], 'revenue' => $chart_month['revenue'], 'total' => $total_month]
+];
 
 // Data Tambahan untuk Dashboard
 $recent_orders = $conn->query("
@@ -73,10 +112,17 @@ $bestselling_events = $conn->query("
 <div class="row mt-2 gy-4">
     <div class="col-lg-8">
         <div class="card shadow-lg border-secondary h-100" style="border-radius:12px; overflow:hidden;">
-            <div class="card-header bg-dark text-white border-bottom border-secondary d-flex justify-content-between align-items-center">
-                <h5 class="mb-0 fs-6"><i class="bi bi-bar-chart-fill me-2 text-info"></i>Grafik Pendapatan (7 Hari)</h5>
-                <span class="badge bg-success bg-opacity-25 text-success border border-success fw-normal px-2 py-1">
-                    <i class="bi bi-wallet2 me-1"></i>Total: Rp <?= number_format($total_7_days, 0, ',', '.') ?>
+            <div class="card-header bg-dark text-white border-bottom border-secondary d-flex flex-wrap gap-2 justify-content-between align-items-center">
+                <div class="d-flex align-items-center gap-2">
+                    <h5 class="mb-0 fs-6"><i class="bi bi-bar-chart-fill me-2 text-info"></i>Grafik Pendapatan</h5>
+                    <select id="chartPeriod" class="form-select form-select-sm bg-dark text-white border-secondary" style="width: auto; font-size: 0.8rem; cursor: pointer;">
+                        <option value="today">Hari Ini</option>
+                        <option value="week" selected>7 Hari Terakhir</option>
+                        <option value="month">Bulan Ini</option>
+                    </select>
+                </div>
+                <span id="chartTotalBadge" class="badge bg-success bg-opacity-25 text-success border border-success fw-normal px-2 py-1">
+                    <i class="bi bi-wallet2 me-1"></i>Total: Rp <?= number_format($total_week, 0, ',', '.') ?>
                 </span>
             </div>
             <div class="card-body p-3 p-md-4" style="background: rgba(15,23,42,0.6);">
@@ -179,13 +225,15 @@ document.addEventListener("DOMContentLoaded", function() {
     hoverGradient.addColorStop(0, 'rgba(14, 165, 233, 1)'); 
     hoverGradient.addColorStop(1, 'rgba(37, 99, 235, 0.4)');
 
-    new Chart(ctx, {
+    const chartData = <?= json_encode($chart_data_js) ?>;
+
+    let revenueChart = new Chart(ctx, {
         type: 'bar',
         data: {
-            labels: <?= json_encode($chart_data['labels']) ?>,
+            labels: chartData['week'].labels,
             datasets: [{
                 label: 'Pendapatan',
-                data: <?= json_encode($chart_data['revenue']) ?>,
+                data: chartData['week'].revenue,
                 backgroundColor: gradient,
                 hoverBackgroundColor: hoverGradient,
                 borderRadius: 6,
@@ -259,6 +307,20 @@ document.addEventListener("DOMContentLoaded", function() {
                 }
             }
         }
+    });
+
+    const periodSelect = document.getElementById('chartPeriod');
+    const totalBadge = document.getElementById('chartTotalBadge');
+
+    periodSelect.addEventListener('change', function() {
+        const period = this.value;
+        const data = chartData[period];
+        
+        revenueChart.data.labels = data.labels;
+        revenueChart.data.datasets[0].data = data.revenue;
+        revenueChart.update();
+
+        totalBadge.innerHTML = '<i class="bi bi-wallet2 me-1"></i>Total: Rp ' + new Intl.NumberFormat('id-ID').format(data.total);
     });
 });
 </script>
