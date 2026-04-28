@@ -1,48 +1,32 @@
 <?php
 require_once '../config/database.php';
 
-if(isset($_SESSION['id_user'])) {
-    if($_SESSION['role'] == 'admin') {
-        header("Location: ../admin/index.php");
-    } elseif($_SESSION['role'] == 'petugas') {
-        header("Location: ../petugas/index.php");
-    } else {
-        header("Location: ../user/index.php");
-    }
+if(!isset($_SESSION['reset_email'])) {
+    header("Location: forgot_password.php");
     exit();
 }
 
 $error = '';
+$email = $_SESSION['reset_email'];
 
 if($_SERVER['REQUEST_METHOD'] == 'POST') {
-    $email = $conn->real_escape_string($_POST['email']);
     $password = $_POST['password'];
+    $confirm_password = $_POST['confirm_password'];
 
-    $result = $conn->query("SELECT * FROM users WHERE email = '$email' LIMIT 1");
-    if($result->num_rows > 0) {
-        $user = $result->fetch_assoc();
-        // Verifikasi password Bcrypt
-        if(password_verify($password, $user['password'])) {
-            // Anti-Session Fixation
-            session_regenerate_id(true);
-
-            $_SESSION['id_user'] = $user['id_user'];
-            $_SESSION['nama'] = $user['nama_lengkap'];
-            $_SESSION['role'] = $user['role'];
-
-            if($user['role'] == 'admin') {
-                header("Location: ../admin/index.php");
-            } elseif($user['role'] == 'petugas') {
-                header("Location: ../petugas/index.php");
-            } else {
-                header("Location: ../user/index.php");
-            }
+    if($password !== $confirm_password) {
+        $error = "Konfirmasi password tidak cocok!";
+    } else {
+        $hashed = password_hash($password, PASSWORD_BCRYPT);
+        
+        $query = "UPDATE users SET password = '$hashed' WHERE email = '$email'";
+        if($conn->query($query)) {
+            unset($_SESSION['reset_email']);
+            $_SESSION['success'] = "Password berhasil diubah. Silakan login dengan password baru.";
+            header("Location: login.php");
             exit();
         } else {
-            $error = "Password tidak sesuai!";
+            $error = "Gagal mengatur ulang password!";
         }
-    } else {
-        $error = "Email tidak ditemukan!";
     }
 }
 ?>
@@ -51,7 +35,7 @@ if($_SERVER['REQUEST_METHOD'] == 'POST') {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Login - F-TIX</title>
+    <title>Reset Password - F-TIX</title>
     <!-- Fonts & Icons -->
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
@@ -155,30 +139,6 @@ if($_SERVER['REQUEST_METHOD'] == 'POST') {
             box-shadow: 0 10px 20px rgba(79, 70, 229, 0.3);
             color: white;
         }
-
-        /* Back button */
-        .btn-back {
-            position: fixed;
-            top: 1.25rem;
-            right: 1.25rem;
-            background: rgba(30, 41, 59, 0.8);
-            backdrop-filter: blur(10px);
-            border: 1px solid rgba(255,255,255,0.1);
-            color: #cbd5e1;
-            border-radius: 50px;
-            padding: 8px 18px;
-            font-size: 0.85rem;
-            font-weight: 600;
-            text-decoration: none;
-            transition: all 0.3s ease;
-            z-index: 10;
-        }
-
-        .btn-back:hover {
-            background: rgba(79, 70, 229, 0.4);
-            border-color: #818cf8;
-            color: #fff;
-        }
     </style>
 </head>
 <body>
@@ -186,26 +146,14 @@ if($_SERVER['REQUEST_METHOD'] == 'POST') {
 <div class="bg-glow-1"></div>
 <div class="bg-glow-2"></div>
 
-<!-- Tombol Kembali -->
-<a href="../index.php" class="btn-back">
-    <i class="bi bi-arrow-left me-1"></i> Beranda
-</a>
-
 <div class="glass-card">
     <a href="../index.php" class="brand-logo"><i class="bi bi-ticket-perforated-fill me-1" style="-webkit-text-fill-color: #818cf8;"></i>F-TIX</a>
     
     <div class="text-center mb-4">
-        <h4 class="fw-bold">Selamat Datang Kembali</h4>
-        <p class="text-muted small">Login untuk mengakses tiket dan e-tiket Anda</p>
+        <h4 class="fw-bold">Buat Password Baru</h4>
+        <p class="text-muted small">Untuk email <strong><?= htmlspecialchars($email) ?></strong></p>
     </div>
     
-    <?php if(isset($_SESSION['success'])): ?>
-        <div class="alert alert-success py-2 border-0 bg-success bg-opacity-25 text-success rounded-3 d-flex align-items-center mb-4">
-            <i class="bi bi-check-circle-fill me-2"></i> <?= $_SESSION['success'] ?>
-        </div>
-        <?php unset($_SESSION['success']); ?>
-    <?php endif; ?>
-
     <?php if($error): ?>
         <div class="alert alert-danger py-2 border-0 bg-danger bg-opacity-25 text-danger rounded-3 d-flex align-items-center mb-4">
             <i class="bi bi-exclamation-triangle-fill me-2"></i> <?= $error ?>
@@ -213,26 +161,26 @@ if($_SERVER['REQUEST_METHOD'] == 'POST') {
     <?php endif; ?>
 
     <form action="" method="POST">
-        <div class="form-floating mb-3">
-            <input type="email" class="form-control" id="floatingInput" name="email" required placeholder="name@example.com">
-            <label for="floatingInput" class="text-muted">Alamat Email</label>
-        </div>
         <div class="form-floating mb-3 position-relative">
-            <input type="password" class="form-control" id="floatingPassword" name="password" required placeholder="Password" style="padding-right: 3rem;">
-            <label for="floatingPassword" class="text-muted">Password</label>
-            <button type="button" class="btn border-0 position-absolute end-0 top-50 translate-middle-y text-muted pe-3" onclick="togglePassword('floatingPassword', 'toggleIcon')" style="z-index: 10;">
-                <i class="bi bi-eye-slash" id="toggleIcon"></i>
+            <input type="password" class="form-control" id="floatingPassword" name="password" required placeholder="Password Baru" style="padding-right: 3rem;" minlength="6">
+            <label for="floatingPassword" class="text-muted">Password Baru</label>
+            <button type="button" class="btn border-0 position-absolute end-0 top-50 translate-middle-y text-muted pe-3" onclick="togglePassword('floatingPassword', 'toggleIcon1')" style="z-index: 10;">
+                <i class="bi bi-eye-slash" id="toggleIcon1"></i>
             </button>
         </div>
         
-        <div class="d-flex justify-content-end mb-4 mt-n2">
-            <a href="forgot_password.php" class="text-decoration-none small" style="color: #818cf8;">Lupa Password?</a>
+        <div class="form-floating mb-4 position-relative">
+            <input type="password" class="form-control" id="floatingConfirmPassword" name="confirm_password" required placeholder="Konfirmasi Password" style="padding-right: 3rem;" minlength="6">
+            <label for="floatingConfirmPassword" class="text-muted">Konfirmasi Password</label>
+            <button type="button" class="btn border-0 position-absolute end-0 top-50 translate-middle-y text-muted pe-3" onclick="togglePassword('floatingConfirmPassword', 'toggleIcon2')" style="z-index: 10;">
+                <i class="bi bi-eye-slash" id="toggleIcon2"></i>
+            </button>
         </div>
         
-        <button class="btn btn-custom w-100 py-2 mb-3" type="submit">Sign In <i class="bi bi-box-arrow-in-right ms-1"></i></button>
+        <button class="btn btn-custom w-100 py-2 mb-3" type="submit">Simpan Password <i class="bi bi-check2-circle ms-1"></i></button>
         
         <div class="text-center mt-3">
-            <span class="text-muted small">Belum punya akun? <a href="register.php" class="text-decoration-none fw-semibold" style="color: #818cf8;">Daftar Sekarang</a></span>
+            <a href="login.php" class="text-decoration-none text-muted small">Batal dan kembali ke Login</a>
         </div>
     </form>
 </div>

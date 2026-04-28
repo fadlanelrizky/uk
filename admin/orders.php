@@ -11,11 +11,15 @@ if(isset($_GET['export']) && $_GET['export'] == 'csv') {
     $search        = isset($_GET['search'])  ? $conn->real_escape_string($_GET['search'])  : '';
     $filter_status = isset($_GET['status'])  ? $conn->real_escape_string($_GET['status'])  : '';
     $filter_event  = isset($_GET['event']) ? (int)$_GET['event'] : '';
+    $filter_waktu  = isset($_GET['waktu']) ? $conn->real_escape_string($_GET['waktu']) : '';
 
     $where_sql = "1=1";
     if($search)        $where_sql .= " AND (o.id_order LIKE '%$search%' OR u.nama_lengkap LIKE '%$search%' OR u.email LIKE '%$search%')";
     if($filter_status) $where_sql .= " AND o.status = '$filter_status'";
     if($filter_event)  $where_sql .= " AND o.id_order IN (SELECT id_order FROM order_detail od JOIN tiket t ON od.id_tiket = t.id_tiket WHERE t.id_event = $filter_event)";
+    if($filter_waktu == 'hari_ini') $where_sql .= " AND DATE(o.tanggal_order) = CURDATE()";
+    elseif($filter_waktu == 'minggu_ini') $where_sql .= " AND YEARWEEK(o.tanggal_order, 1) = YEARWEEK(CURDATE(), 1)";
+    elseif($filter_waktu == 'bulan_ini') $where_sql .= " AND MONTH(o.tanggal_order) = MONTH(CURDATE()) AND YEAR(o.tanggal_order) = YEAR(CURDATE())";
 
     // BOM UTF-8 agar Excel tidak salah baca karakter
     header('Content-Type: text/csv; charset=utf-8');
@@ -53,11 +57,15 @@ require_once '../includes/header.php';
 $search        = isset($_GET['search']) ? $conn->real_escape_string($_GET['search']) : '';
 $filter_status = isset($_GET['status']) ? $conn->real_escape_string($_GET['status']) : '';
 $filter_event  = isset($_GET['event']) ? (int)$_GET['event'] : '';
+$filter_waktu  = isset($_GET['waktu']) ? $conn->real_escape_string($_GET['waktu']) : '';
 
 $where_sql = "1=1";
 if($search)        $where_sql .= " AND (o.id_order LIKE '%$search%' OR u.nama_lengkap LIKE '%$search%' OR u.email LIKE '%$search%')";
 if($filter_status) $where_sql .= " AND o.status = '$filter_status'";
 if($filter_event)  $where_sql .= " AND o.id_order IN (SELECT id_order FROM order_detail od JOIN tiket t ON od.id_tiket = t.id_tiket WHERE t.id_event = $filter_event)";
+if($filter_waktu == 'hari_ini') $where_sql .= " AND DATE(o.tanggal_order) = CURDATE()";
+elseif($filter_waktu == 'minggu_ini') $where_sql .= " AND YEARWEEK(o.tanggal_order, 1) = YEARWEEK(CURDATE(), 1)";
+elseif($filter_waktu == 'bulan_ini') $where_sql .= " AND MONTH(o.tanggal_order) = MONTH(CURDATE()) AND YEAR(o.tanggal_order) = YEAR(CURDATE())";
 
 $msg = '';
 
@@ -157,14 +165,13 @@ $events = $conn->query("SELECT id_event, nama_event FROM event ORDER BY tanggal_
         <div class="card shadow-sm border-secondary" style="background: rgba(15,23,42,0.4); border-radius: 12px;">
             <div class="card-body p-3">
                 <form action="" method="GET" class="row g-3 align-items-center">
-                    <div class="col-md-4">
+                    <div class="col-md-3">
                         <div class="input-group">
                             <span class="input-group-text bg-dark border-secondary text-white-50"><i class="bi bi-search"></i></span>
-                            <input type="text" name="search" class="form-control border-secondary bg-dark text-white" placeholder="Cari ID, Nama, Email..." value="<?= htmlspecialchars($search) ?>">
-                            <button class="btn btn-primary px-3" type="submit" style="z-index: 0;">Cari</button>
+                            <input type="text" name="search" class="form-control border-secondary bg-dark text-white" placeholder="Cari ID, Nama..." value="<?= htmlspecialchars($search) ?>">
                         </div>
                     </div>
-                    <div class="col-md-3">
+                    <div class="col-md-2">
                         <select name="event" class="form-select border-secondary bg-dark text-white" onchange="this.form.submit()">
                             <option value="">Semua Event</option>
                             <?php 
@@ -183,6 +190,14 @@ $events = $conn->query("SELECT id_event, nama_event FROM event ORDER BY tanggal_
                             <option value="cancelled" <?= $filter_status == 'cancelled' ? 'selected' : '' ?>>Cancelled (Batal)</option>
                         </select>
                     </div>
+                    <div class="col-md-2">
+                        <select name="waktu" class="form-select border-secondary bg-dark text-white" onchange="this.form.submit()">
+                            <option value="">Semua Waktu</option>
+                            <option value="hari_ini" <?= $filter_waktu == 'hari_ini' ? 'selected' : '' ?>>Hari Ini</option>
+                            <option value="minggu_ini" <?= $filter_waktu == 'minggu_ini' ? 'selected' : '' ?>>Minggu Ini</option>
+                            <option value="bulan_ini" <?= $filter_waktu == 'bulan_ini' ? 'selected' : '' ?>>Bulan Ini</option>
+                        </select>
+                    </div>
                     <div class="col-md-3 d-flex justify-content-md-end gap-2">
                         <select name="per_page" class="form-select border-secondary bg-dark text-white" style="width: 80px;" onchange="this.form.submit()">
                             <option value="5" <?= $per_page == 5 ? 'selected' : '' ?>>5</option>
@@ -191,7 +206,7 @@ $events = $conn->query("SELECT id_event, nama_event FROM event ORDER BY tanggal_
                             <option value="50" <?= $per_page == 50 ? 'selected' : '' ?>>50</option>
                             <option value="100" <?= $per_page == 100 ? 'selected' : '' ?>>100</option>
                         </select>
-                        <?php if($search || $filter_status || $filter_event): ?>
+                        <?php if($search || $filter_status || $filter_event || $filter_waktu): ?>
                             <a href="orders.php" class="btn btn-outline-danger" title="Hapus Filter"><i class="bi bi-x-lg"></i></a>
                         <?php endif; ?>
                     </div>
@@ -205,7 +220,7 @@ $events = $conn->query("SELECT id_event, nama_event FROM event ORDER BY tanggal_
             <div class="card-header bg-dark text-white d-flex justify-content-between align-items-center border-bottom border-secondary p-3">
                 <span class="fs-5 fw-semibold"><i class="bi bi-receipt me-2 text-primary"></i>Daftar Transaksi</span>
                 <div class="d-print-none text-end">
-                    <a href="?export=csv&search=<?=urlencode($search)?>&status=<?=urlencode($filter_status)?>&event=<?=urlencode($filter_event)?>" class="btn btn-sm btn-success me-1 text-nowrap"><i class="bi bi-file-earmark-excel me-1"></i>Export CSV</a>
+                    <a href="?export=csv&search=<?=urlencode($search)?>&status=<?=urlencode($filter_status)?>&event=<?=urlencode($filter_event)?>&waktu=<?=urlencode($filter_waktu)?>" class="btn btn-sm btn-success me-1 text-nowrap"><i class="bi bi-file-earmark-excel me-1"></i>Export CSV</a>
                     <button onclick="window.print()" class="btn btn-sm btn-danger text-nowrap"><i class="bi bi-file-pdf me-1"></i>Cetak PDF</button>
                 </div>
             </div>
@@ -366,17 +381,17 @@ $events = $conn->query("SELECT id_event, nama_event FROM event ORDER BY tanggal_
                         <ul class="pagination pagination-sm justify-content-center mb-0" data-bs-theme="dark">
                             <!-- Prev -->
                             <li class="page-item <?= ($page <= 1) ? 'disabled' : '' ?>">
-                                <a class="page-link bg-dark text-white border-secondary" href="?page=<?= $page - 1 ?>&search=<?=urlencode($search)?>&status=<?=urlencode($filter_status)?>&event=<?=urlencode($filter_event)?>&per_page=<?= $per_page ?>">&laquo;</a>
+                                <a class="page-link bg-dark text-white border-secondary" href="?page=<?= $page - 1 ?>&search=<?=urlencode($search)?>&status=<?=urlencode($filter_status)?>&event=<?=urlencode($filter_event)?>&waktu=<?=urlencode($filter_waktu)?>&per_page=<?= $per_page ?>">&laquo;</a>
                             </li>
                             <!-- Num -->
                             <?php for($i=1; $i<=$total_pages; $i++): ?>
                                 <li class="page-item <?= ($page == $i) ? 'active' : '' ?>">
-                                    <a class="page-link <?= ($page == $i) ? 'bg-primary border-primary text-white' : 'bg-dark text-white border-secondary' ?>" href="?page=<?= $i ?>&search=<?=urlencode($search)?>&status=<?=urlencode($filter_status)?>&event=<?=urlencode($filter_event)?>&per_page=<?= $per_page ?>"><?= $i ?></a>
+                                    <a class="page-link <?= ($page == $i) ? 'bg-primary border-primary text-white' : 'bg-dark text-white border-secondary' ?>" href="?page=<?= $i ?>&search=<?=urlencode($search)?>&status=<?=urlencode($filter_status)?>&event=<?=urlencode($filter_event)?>&waktu=<?=urlencode($filter_waktu)?>&per_page=<?= $per_page ?>"><?= $i ?></a>
                                 </li>
                             <?php endfor; ?>
                             <!-- Next -->
                             <li class="page-item <?= ($page >= $total_pages) ? 'disabled' : '' ?>">
-                                <a class="page-link bg-dark text-white border-secondary" href="?page=<?= $page + 1 ?>&search=<?=urlencode($search)?>&status=<?=urlencode($filter_status)?>&event=<?=urlencode($filter_event)?>&per_page=<?= $per_page ?>">&raquo;</a>
+                                <a class="page-link bg-dark text-white border-secondary" href="?page=<?= $page + 1 ?>&search=<?=urlencode($search)?>&status=<?=urlencode($filter_status)?>&event=<?=urlencode($filter_event)?>&waktu=<?=urlencode($filter_waktu)?>&per_page=<?= $per_page ?>">&raquo;</a>
                             </li>
                         </ul>
                     </nav>

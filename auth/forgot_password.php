@@ -2,13 +2,7 @@
 require_once '../config/database.php';
 
 if(isset($_SESSION['id_user'])) {
-    if($_SESSION['role'] == 'admin') {
-        header("Location: ../admin/index.php");
-    } elseif($_SESSION['role'] == 'petugas') {
-        header("Location: ../petugas/index.php");
-    } else {
-        header("Location: ../user/index.php");
-    }
+    header("Location: ../index.php");
     exit();
 }
 
@@ -16,33 +10,15 @@ $error = '';
 
 if($_SERVER['REQUEST_METHOD'] == 'POST') {
     $email = $conn->real_escape_string($_POST['email']);
-    $password = $_POST['password'];
 
-    $result = $conn->query("SELECT * FROM users WHERE email = '$email' LIMIT 1");
+    $result = $conn->query("SELECT id_user FROM users WHERE email = '$email' LIMIT 1");
     if($result->num_rows > 0) {
-        $user = $result->fetch_assoc();
-        // Verifikasi password Bcrypt
-        if(password_verify($password, $user['password'])) {
-            // Anti-Session Fixation
-            session_regenerate_id(true);
-
-            $_SESSION['id_user'] = $user['id_user'];
-            $_SESSION['nama'] = $user['nama_lengkap'];
-            $_SESSION['role'] = $user['role'];
-
-            if($user['role'] == 'admin') {
-                header("Location: ../admin/index.php");
-            } elseif($user['role'] == 'petugas') {
-                header("Location: ../petugas/index.php");
-            } else {
-                header("Location: ../user/index.php");
-            }
-            exit();
-        } else {
-            $error = "Password tidak sesuai!";
-        }
+        // Email valid, save to session and redirect
+        $_SESSION['reset_email'] = $email;
+        header("Location: reset_password.php");
+        exit();
     } else {
-        $error = "Email tidak ditemukan!";
+        $error = "Email tidak ditemukan dalam sistem kami.";
     }
 }
 ?>
@@ -51,7 +27,7 @@ if($_SERVER['REQUEST_METHOD'] == 'POST') {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Login - F-TIX</title>
+    <title>Lupa Password - F-TIX</title>
     <!-- Fonts & Icons -->
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
@@ -160,7 +136,7 @@ if($_SERVER['REQUEST_METHOD'] == 'POST') {
         .btn-back {
             position: fixed;
             top: 1.25rem;
-            right: 1.25rem;
+            left: 1.25rem;
             background: rgba(30, 41, 59, 0.8);
             backdrop-filter: blur(10px);
             border: 1px solid rgba(255,255,255,0.1);
@@ -187,25 +163,18 @@ if($_SERVER['REQUEST_METHOD'] == 'POST') {
 <div class="bg-glow-2"></div>
 
 <!-- Tombol Kembali -->
-<a href="../index.php" class="btn-back">
-    <i class="bi bi-arrow-left me-1"></i> Beranda
+<a href="login.php" class="btn-back">
+    <i class="bi bi-arrow-left me-1"></i> Kembali ke Login
 </a>
 
 <div class="glass-card">
     <a href="../index.php" class="brand-logo"><i class="bi bi-ticket-perforated-fill me-1" style="-webkit-text-fill-color: #818cf8;"></i>F-TIX</a>
     
     <div class="text-center mb-4">
-        <h4 class="fw-bold">Selamat Datang Kembali</h4>
-        <p class="text-muted small">Login untuk mengakses tiket dan e-tiket Anda</p>
+        <h4 class="fw-bold">Lupa Password</h4>
+        <p class="text-muted small">Masukkan email yang terdaftar untuk mengatur ulang password Anda</p>
     </div>
     
-    <?php if(isset($_SESSION['success'])): ?>
-        <div class="alert alert-success py-2 border-0 bg-success bg-opacity-25 text-success rounded-3 d-flex align-items-center mb-4">
-            <i class="bi bi-check-circle-fill me-2"></i> <?= $_SESSION['success'] ?>
-        </div>
-        <?php unset($_SESSION['success']); ?>
-    <?php endif; ?>
-
     <?php if($error): ?>
         <div class="alert alert-danger py-2 border-0 bg-danger bg-opacity-25 text-danger rounded-3 d-flex align-items-center mb-4">
             <i class="bi bi-exclamation-triangle-fill me-2"></i> <?= $error ?>
@@ -213,42 +182,14 @@ if($_SERVER['REQUEST_METHOD'] == 'POST') {
     <?php endif; ?>
 
     <form action="" method="POST">
-        <div class="form-floating mb-3">
+        <div class="form-floating mb-4">
             <input type="email" class="form-control" id="floatingInput" name="email" required placeholder="name@example.com">
             <label for="floatingInput" class="text-muted">Alamat Email</label>
         </div>
-        <div class="form-floating mb-3 position-relative">
-            <input type="password" class="form-control" id="floatingPassword" name="password" required placeholder="Password" style="padding-right: 3rem;">
-            <label for="floatingPassword" class="text-muted">Password</label>
-            <button type="button" class="btn border-0 position-absolute end-0 top-50 translate-middle-y text-muted pe-3" onclick="togglePassword('floatingPassword', 'toggleIcon')" style="z-index: 10;">
-                <i class="bi bi-eye-slash" id="toggleIcon"></i>
-            </button>
-        </div>
         
-        <div class="d-flex justify-content-end mb-4 mt-n2">
-            <a href="forgot_password.php" class="text-decoration-none small" style="color: #818cf8;">Lupa Password?</a>
-        </div>
-        
-        <button class="btn btn-custom w-100 py-2 mb-3" type="submit">Sign In <i class="bi bi-box-arrow-in-right ms-1"></i></button>
-        
-        <div class="text-center mt-3">
-            <span class="text-muted small">Belum punya akun? <a href="register.php" class="text-decoration-none fw-semibold" style="color: #818cf8;">Daftar Sekarang</a></span>
-        </div>
+        <button class="btn btn-custom w-100 py-2 mb-3" type="submit">Lanjutkan <i class="bi bi-arrow-right ms-1"></i></button>
     </form>
 </div>
 
-<script>
-function togglePassword(inputId, iconId) {
-    const input = document.getElementById(inputId);
-    const icon = document.getElementById(iconId);
-    if (input.type === 'password') {
-        input.type = 'text';
-        icon.classList.replace('bi-eye-slash', 'bi-eye');
-    } else {
-        input.type = 'password';
-        icon.classList.replace('bi-eye', 'bi-eye-slash');
-    }
-}
-</script>
 </body>
 </html>
